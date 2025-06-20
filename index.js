@@ -1,4 +1,5 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');const { Client, LocalAuth } = require('whatsapp-web.js');
+// Fentrix Stock Bot - Fixed Version
+const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
 
