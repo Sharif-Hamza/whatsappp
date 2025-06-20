@@ -1,4 +1,4 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { Client, LocalAuth } = require('whatsapp-web.js');const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
 
@@ -610,35 +610,94 @@ client.on('message_create', async (msg) => {
           await sendBotResponse(msg, '🎉 *FENTRIX STOCK BOT OPERATIONAL ON RAILWAY!* 🚀\n\n📈 Real stock/crypto prices: ✅\n🌐 Professional sentiment analysis: ✅\n📰 Real-time news integration: ✅\n📊 Fear & Greed Index: ✅\n🎨 Clean professional responses: ✅\n🚨 Price alerts + LIVE monitoring (15s): ✅\n📊 Continuous background monitoring: ✅\n👥 Group mode: Everyone can use commands ✅\n🤖 Powered by Fentrix.Ai: ✅\n🌐 24/7 Railway cloud hosting: ✅\n\n🔥 *ALL FEATURES OPERATIONAL!*\n\nTry: !stock AAPL or !alert bitcoin $45000\n\n🤖 Fentrix.Ai Professional Trading Bot');
         }
         
-        // Debug command - ADD FOR TROUBLESHOOTING
+        // Debug command - ENHANCED TROUBLESHOOTING
         else if (text.includes('!debug')) {
           console.log('🔧 DEBUG COMMAND');
           
-          let debugInfo = '🔧 *DEBUG INFORMATION* 🛠️\n\n';
-          
-          // Service status
-          debugInfo += '📊 *SERVICE STATUS:*\n';
-          debugInfo += `• Stock Service: ${stockService ? '✅ Loaded' : '❌ Failed'}\n`;
-          debugInfo += `• Sentiment Service: ${enhancedSentimentService ? '✅ Loaded' : '❌ Failed'}\n`;
-          debugInfo += `• Alert Service: ${alertService ? '✅ Loaded' : '❌ Failed'}\n\n`;
-          
-          // Configuration status
-          debugInfo += '⚙️ *CONFIGURATION:*\n';
-          debugInfo += `• Alpha Vantage Key: ${config.ALPHA_VANTAGE_API_KEY ? '✅ Set' : '❌ Missing'}\n`;
-          debugInfo += `• DeepSeek Key: ${config.DEEPSEEK_API_KEY ? '✅ Set' : '❌ Missing'}\n`;
-          debugInfo += `• Stock API: ${config.STOCK_API_BASE ? '✅ Set' : '❌ Missing'}\n`;
-          debugInfo += `• Crypto API: ${config.CRYPTO_API_BASE ? '✅ Set' : '❌ Missing'}\n\n`;
-          
-          // Environment
-          debugInfo += '🌐 *ENVIRONMENT:*\n';
-          debugInfo += `• Node.js: ${process.version}\n`;
-          debugInfo += `• Environment: ${config.NODE_ENV}\n`;
-          debugInfo += `• Port: ${config.PORT}\n\n`;
-          
-          debugInfo += '💡 Try: !stock AAPL or !crypto bitcoin\n';
-          debugInfo += '🤖 Powered by Fentrix.Ai';
-          
-          await sendBotResponse(msg, debugInfo);
+          try {
+            let debugInfo = '🔧 *DEBUG INFORMATION* 🛠️\n\n';
+            
+            // Service status with detailed checks
+            debugInfo += '📊 *SERVICE STATUS:*\n';
+            debugInfo += `• Stock Service: ${stockService ? '✅ Loaded' : '❌ Failed'}\n`;
+            debugInfo += `• Sentiment Service: ${enhancedSentimentService ? '✅ Loaded' : '❌ Failed'}\n`;
+            debugInfo += `• Alert Service: ${alertService ? '✅ Loaded' : '❌ Failed'}\n\n`;
+            
+            // Service functionality tests
+            if (stockService) {
+              debugInfo += '🧪 *SERVICE FUNCTIONALITY:*\n';
+              try {
+                debugInfo += `• Stock API: Testing...\n`;
+                debugInfo += `• Crypto API: Testing...\n`;
+                debugInfo += `• Alert monitoring: ${alertService?.isMonitoring ? '🟢 Active' : '🔴 Inactive'}\n\n`;
+              } catch (error) {
+                debugInfo += `• API Tests: ❌ Failed to test\n\n`;
+              }
+            }
+            
+            // Configuration status
+            debugInfo += '⚙️ *CONFIGURATION:*\n';
+            debugInfo += `• Alpha Vantage Key: ${config.ALPHA_VANTAGE_API_KEY ? '✅ Set' : '❌ Missing'}\n`;
+            debugInfo += `• DeepSeek Key: ${config.DEEPSEEK_API_KEY ? '✅ Set' : '❌ Missing'}\n`;
+            debugInfo += `• Stock API: ${config.STOCK_API_BASE ? '✅ Set' : '❌ Missing'}\n`;
+            debugInfo += `• Crypto API: ${config.CRYPTO_API_BASE ? '✅ Set' : '❌ Missing'}\n\n`;
+            
+            // Environment
+            debugInfo += '🌐 *ENVIRONMENT:*\n';
+            debugInfo += `• Node.js: ${process.version}\n`;
+            debugInfo += `• Environment: ${config.NODE_ENV}\n`;
+            debugInfo += `• Port: ${config.PORT}\n`;
+            debugInfo += `• Uptime: ${Math.floor(process.uptime())} seconds\n\n`;
+            
+            // Alert service status
+            if (alertService) {
+              const alertStatus = alertService.getStatus();
+              debugInfo += '🚨 *ALERT SERVICE:*\n';
+              debugInfo += `• Total Active Alerts: ${alertStatus.totalAlerts}\n`;
+              debugInfo += `• Monitoring Active: ${alertStatus.isMonitoring ? '✅ Yes' : '❌ No'}\n`;
+              debugInfo += `• Check Interval: ${alertStatus.checkInterval / 1000}s\n`;
+              debugInfo += `• Bot Client Connected: ${alertStatus.botClientConnected ? '✅ Yes' : '❌ No'}\n\n`;
+            }
+            
+            debugInfo += '💡 *QUICK TESTS:*\n';
+            debugInfo += '📈 !stock AAPL - Test stock data\n';
+            debugInfo += '🪙 !crypto bitcoin - Test crypto data\n';
+            debugInfo += '🚨 !alert AAPL $190.00 - Test alerts\n';
+            debugInfo += '🧠 !sentiment AAPL - Test sentiment\n\n';
+            debugInfo += '🤖 *Powered by Fentrix.Ai*';
+            
+            await sendBotResponse(msg, debugInfo);
+            
+            // Also run a quick API test in the background and report results
+            if (stockService) {
+              setTimeout(async () => {
+                try {
+                  console.log('🧪 Running background API tests...');
+                  const testResults = await stockService.testService();
+                  
+                  let testReport = '🧪 *API TEST RESULTS* 📊\n\n';
+                  testReport += `📈 *Stock API:* ${testResults.stockTest ? '✅ Working' : '❌ Failed'}\n`;
+                  if (testResults.stockError) {
+                    testReport += `   Error: ${testResults.stockError}\n`;
+                  }
+                  testReport += `🪙 *Crypto API:* ${testResults.cryptoTest ? '✅ Working' : '❌ Failed'}\n`;
+                  if (testResults.cryptoError) {
+                    testReport += `   Error: ${testResults.cryptoError}\n`;
+                  }
+                  testReport += '\n🤖 *Powered by Fentrix.Ai*';
+                  
+                  await sendBotResponse(msg, testReport);
+                  console.log('✅ Background API tests completed');
+                } catch (error) {
+                  console.log('❌ Background API tests failed:', error.message);
+                }
+              }, 2000);
+            }
+            
+          } catch (error) {
+            console.error('❌ Debug command failed:', error.message);
+            await sendBotResponse(msg, `❌ Debug command failed: ${error.message}\n\n🤖 Powered by Fentrix.Ai`);
+          }
         }
         
         // Stock commands
@@ -725,35 +784,39 @@ client.on('message_create', async (msg) => {
           }
         }
         
-        // Alert commands - ADD MISSING FUNCTIONALITY
+        // Alert commands - FIXED FUNCTIONALITY
         else if (text.startsWith('!alert ')) {
           if (!alertService) {
             await sendBotResponse(msg, '❌ Alert service not available. Please try again later.');
             return;
           }
           
-          const alertText = text.replace('!alert ', '').trim();
-          console.log(`🚨 PROCESSING ALERT: ${alertText}`);
+          console.log(`🚨 PROCESSING ALERT COMMAND: "${text}"`);
           
           try {
-            await sendBotResponse(msg, '🔄 Setting up price alert...\n📊 Analyzing target price...\nPlease wait...');
+            await sendBotResponse(msg, '🔄 Setting up price alert...\n📊 Fetching current price...\n🎯 Analyzing target price...\nPlease wait...');
             
-            const result = await alertService.addAlert(alertText, msg.from);
+            // Get user info for the alert
+            const contact = await msg.getContact();
+            const userName = contact.name || contact.pushname || 'User';
+            
+            // Use the new alert service interface
+            const result = await alertService.addAlert(text, msg.from, msg.author || msg.from, userName);
             console.log(`✅ Alert result: ${result.success}`);
             
             if (result.success) {
               await sendBotResponse(msg, result.message);
             } else {
-              await sendBotResponse(msg, `❌ Alert setup failed: ${result.message}`);
+              await sendBotResponse(msg, result.message);
             }
             
           } catch (error) {
             console.log(`❌ Alert setup failed: ${error.message}`);
-            await sendBotResponse(msg, `❌ Could not set up alert: ${error.message}\n\n💡 Examples:\n🚨 !alert AAPL $187.50\n🚨 !alert bitcoin $45000\n🚨 !alert bitcoin 104,350\n\n🤖 Powered by Fentrix.Ai`);
+            await sendBotResponse(msg, `❌ Could not set up alert: ${error.message}\n\n💡 Examples:\n🚨 !alert AAPL $187.50\n🚨 !alert bitcoin $45000\n🚨 !alert TSLA $200.00\n\n🤖 Powered by Fentrix.Ai`);
           }
         }
         
-        // Alerts list command - ADD MISSING FUNCTIONALITY
+        // Alerts list command - FIXED FUNCTIONALITY
         else if (text.includes('!alerts')) {
           if (!alertService) {
             await sendBotResponse(msg, '❌ Alert service not available. Please try again later.');
@@ -763,23 +826,45 @@ client.on('message_create', async (msg) => {
           console.log('📋 LISTING ACTIVE ALERTS');
           
           try {
-            const alertsList = alertService.getActiveAlerts();
-            console.log(`✅ Found ${alertsList.length} active alerts`);
+            // Get alerts for this specific chat
+            const chatAlerts = alertService.getChatAlerts(msg.from);
+            const totalAlerts = alertService.getActiveAlerts().length;
             
-            if (alertsList.length === 0) {
-              await sendBotResponse(msg, '📋 *ACTIVE ALERTS* 🚨\n\n❌ No active alerts\n\n💡 Set an alert with:\n🚨 !alert AAPL $187.50\n🚨 !alert bitcoin $45000\n\n🤖 Powered by Fentrix.Ai');
+            console.log(`✅ Found ${chatAlerts.length} alerts in this chat, ${totalAlerts} total`);
+            
+            if (chatAlerts.length === 0) {
+              await sendBotResponse(msg, '📋 *ACTIVE ALERTS IN THIS CHAT* 🚨\n\n❌ No active alerts in this chat\n\n💡 Set an alert with:\n🚨 !alert AAPL $187.50\n🚨 !alert bitcoin $45000\n🚨 !alert TSLA $200.00\n\n🔍 Live monitoring active (15s intervals)\n🤖 Powered by Fentrix.Ai');
             } else {
-              let alertsText = '📋 *ACTIVE ALERTS* 🚨\n\n';
+              let alertsText = `📋 *ACTIVE ALERTS IN THIS CHAT* 🚨\n\n`;
               
-              alertsList.forEach((alert, index) => {
-                const direction = alert.direction === 'up' ? '⬆️ UP' : alert.direction === 'down' ? '⬇️ DOWN' : '🎯 EXACT';
-                alertsText += `${index + 1}. ${alert.symbol.toUpperCase()}\n`;
-                alertsText += `   💰 Target: $${alert.targetPrice.toLocaleString()}\n`;
-                alertsText += `   🎯 Direction: ${direction}\n`;
-                alertsText += `   ⏰ Created: ${new Date(alert.created).toLocaleString()}\n\n`;
-              });
+              // Separate stocks and crypto for better display
+              const stockAlerts = chatAlerts.filter(alert => alert.assetType === 'stock');
+              const cryptoAlerts = chatAlerts.filter(alert => alert.assetType === 'crypto');
+
+              if (stockAlerts.length > 0) {
+                alertsText += `📈 *STOCKS (${stockAlerts.length}):*\n`;
+                stockAlerts.forEach((alert, index) => {
+                  const timeAgo = getTimeAgo(alert.createdAt);
+                  const directionEmoji = alert.alertDirection === 'up' ? '⬆️' : alert.alertDirection === 'down' ? '⬇️' : '🎯';
+                  alertsText += `${index + 1}. 📊 *${alert.symbol}* - Target: $${alert.targetPrice.toLocaleString()} ${directionEmoji}\n`;
+                  alertsText += `   👤 By: ${alert.userName} | ⏰ ${timeAgo}\n\n`;
+                });
+              }
+
+              if (cryptoAlerts.length > 0) {
+                alertsText += `🪙 *CRYPTO (${cryptoAlerts.length}):*\n`;
+                cryptoAlerts.forEach((alert, index) => {
+                  const timeAgo = getTimeAgo(alert.createdAt);
+                  const directionEmoji = alert.alertDirection === 'up' ? '⬆️' : alert.alertDirection === 'down' ? '⬇️' : '🎯';
+                  alertsText += `${index + 1}. 🪙 *${alert.symbol}* - Target: $${alert.targetPrice.toLocaleString()} ${directionEmoji}\n`;
+                  alertsText += `   👤 By: ${alert.userName} | ⏰ ${timeAgo}\n\n`;
+                });
+              }
               
-              alertsText += '🔄 Live monitoring active (15s intervals)\n🤖 Powered by Fentrix.Ai';
+              alertsText += `🔍 *Live monitoring active* (15s intervals)\n`;
+              alertsText += `📊 Total alerts across all chats: ${totalAlerts}\n`;
+              alertsText += '🤖 *Powered by Fentrix.Ai*';
+              
               await sendBotResponse(msg, alertsText);
             }
             
@@ -789,7 +874,7 @@ client.on('message_create', async (msg) => {
           }
         }
         
-        // Sentiment analysis commands - ADD MISSING FUNCTIONALITY
+        // Sentiment analysis commands - FIXED FUNCTIONALITY
         else if (text.startsWith('!sentiment')) {
           if (!enhancedSentimentService) {
             await sendBotResponse(msg, '❌ Sentiment analysis service not available. Please try again later.');
@@ -815,9 +900,11 @@ client.on('message_create', async (msg) => {
                   // Try as stock first
                   try {
                     priceData = await stockService.getStockPrice(symbol);
+                    console.log(`✅ Got stock price data for sentiment analysis: ${symbol}`);
                   } catch {
                     // Try as crypto if stock fails
                     priceData = await stockService.getCryptoPrice(symbol.toLowerCase());
+                    console.log(`✅ Got crypto price data for sentiment analysis: ${symbol}`);
                   }
                 }
               } catch (priceError) {
@@ -911,6 +998,20 @@ client.on('message_create', async (msg) => {
     }
   }
 });
+
+// Helper function to calculate time ago
+function getTimeAgo(date) {
+  const now = new Date();
+  const diff = now - date;
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}d ago`;
+  if (hours > 0) return `${hours}h ago`;
+  if (minutes > 0) return `${minutes}m ago`;
+  return 'Just now';
+}
 
 // Function to send bot responses
 async function sendBotResponse(originalMsg, responseText) {
