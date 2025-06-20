@@ -1,4 +1,4 @@
-// Fentrix Stock Bot - Fixed Version
+// Fentrix Stock Bot - Fixed Version// Fentrix Stock Bot - Fixed Version
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
@@ -418,31 +418,38 @@ try {
 }
 
 try {
-  console.log('\n📈 LOADING STOCK SERVICE...');
+  console.log('\n📈 LOADING REAL-TIME STOCK SERVICE...');
   
-  // Load each service individually with enhanced error handling
+  // PRIORITY 1: Try Real-Time Stock Service with multiple data sources
   try {
-    console.log('🔄 Attempting to require ./services/stockService...');
-    stockService = require('./services/stockService');
-    console.log('✅ Stock service loaded successfully');
-    console.log('📊 Stock service type:', typeof stockService);
-    console.log('📋 Stock service constructor name:', stockService.constructor.name);
-  } catch (stockError) {
-    console.error('❌ STOCK SERVICE LOADING FAILED:');
-    console.error('📝 Error message:', stockError.message);
-    console.error('📝 Error code:', stockError.code);
-    console.error('📝 Full stack trace:', stockError.stack);
-    console.error('📝 Error type:', stockError.name);
+    console.log('🔄 PRIORITY 1: Attempting to load REAL-TIME stock service...');
+    stockService = require('./services/realtimeStockService');
+    console.log('✅ REAL-TIME STOCK SERVICE LOADED SUCCESSFULLY!');
+    console.log('📊 Real-time service type:', typeof stockService);
+    console.log('🚀 Multiple data sources available for live prices');
+  } catch (realtimeError) {
+    console.error('❌ REAL-TIME STOCK SERVICE LOADING FAILED:');
+    console.error('📝 Error message:', realtimeError.message);
     
-    // FALLBACK: Try simple stock service
-    console.log('🔄 FALLBACK: Attempting to load simpleStockService...');
+    // FALLBACK 1: Try original stock service
+    console.log('🔄 FALLBACK 1: Attempting to load original stockService...');
     try {
-      stockService = require('./services/simpleStockService');
-      console.log('✅ FALLBACK SUCCESS: Simple stock service loaded!');
-      console.log('📊 Simple stock service type:', typeof stockService);
-    } catch (simpleError) {
-      console.error('❌ FALLBACK FAILED: Simple stock service also failed:', simpleError.message);
-      stockService = null;
+      stockService = require('./services/stockService');
+      console.log('✅ FALLBACK 1 SUCCESS: Original stock service loaded!');
+      console.log('📊 Stock service type:', typeof stockService);
+    } catch (stockError) {
+      console.error('❌ FALLBACK 1 FAILED:', stockError.message);
+      
+      // FALLBACK 2: Try simple stock service
+      console.log('🔄 FALLBACK 2: Attempting to load simpleStockService...');
+      try {
+        stockService = require('./services/simpleStockService');
+        console.log('✅ FALLBACK 2 SUCCESS: Simple stock service loaded!');
+        console.log('📊 Simple stock service type:', typeof stockService);
+      } catch (simpleError) {
+        console.error('❌ ALL STOCK SERVICES FAILED:', simpleError.message);
+        stockService = null;
+      }
     }
   }
   
@@ -471,28 +478,38 @@ try {
     }
   }
   
-  console.log('\n🚨 LOADING ALERT SERVICE...');
+  console.log('\n🚨 LOADING WORKING ALERT SERVICE...');
+  
+  // PRIORITY 1: Try Working Alert Service with real monitoring
   try {
-    console.log('🔄 Attempting to require ./services/alertService...');
-    alertService = require('./services/alertService');
-    console.log('✅ Alert service loaded successfully');
-    console.log('📊 Alert service type:', typeof alertService);
-  } catch (alertError) {
-    console.error('❌ ALERT SERVICE LOADING FAILED:');
-    console.error('📝 Error message:', alertError.message);
-    console.error('📝 Error code:', alertError.code);
-    console.error('📝 Full stack trace:', alertError.stack);
-    console.error('📝 Error type:', alertError.name);
+    console.log('🔄 PRIORITY 1: Attempting to load WORKING alert service...');
+    alertService = require('./services/workingAlertService');
+    console.log('✅ WORKING ALERT SERVICE LOADED SUCCESSFULLY!');
+    console.log('📊 Working alert service type:', typeof alertService);
+    console.log('🚀 Real-time price monitoring available');
+  } catch (workingError) {
+    console.error('❌ WORKING ALERT SERVICE LOADING FAILED:');
+    console.error('📝 Error message:', workingError.message);
     
-    // FALLBACK: Try simple alert service
-    console.log('🔄 FALLBACK: Attempting to load simpleAlertService...');
+    // FALLBACK 1: Try original alert service
+    console.log('🔄 FALLBACK 1: Attempting to load original alertService...');
     try {
-      alertService = require('./services/simpleAlertService');
-      console.log('✅ FALLBACK SUCCESS: Simple alert service loaded!');
-      console.log('📊 Simple alert service type:', typeof alertService);
-    } catch (simpleError) {
-      console.error('❌ FALLBACK FAILED: Simple alert service also failed:', simpleError.message);
-      alertService = null;
+      alertService = require('./services/alertService');
+      console.log('✅ FALLBACK 1 SUCCESS: Original alert service loaded!');
+      console.log('📊 Alert service type:', typeof alertService);
+    } catch (alertError) {
+      console.error('❌ FALLBACK 1 FAILED:', alertError.message);
+      
+      // FALLBACK 2: Try simple alert service
+      console.log('🔄 FALLBACK 2: Attempting to load simpleAlertService...');
+      try {
+        alertService = require('./services/simpleAlertService');
+        console.log('✅ FALLBACK 2 SUCCESS: Simple alert service loaded!');
+        console.log('📊 Simple alert service type:', typeof alertService);
+      } catch (simpleError) {
+        console.error('❌ ALL ALERT SERVICES FAILED:', simpleError.message);
+        alertService = null;
+      }
     }
   }
   
@@ -638,44 +655,59 @@ client.on('authenticated', () => {
 client.on('ready', () => {
   console.log('\n🚀 FENTRIX STOCK BOT IS NOW LIVE ON RAILWAY!');
   console.log('==========================================');
-  console.log('📈 Real stock/crypto data: ✅');
+  console.log('📈 Real-time stock/crypto data: ✅');
   console.log('🌐 Professional sentiment analysis: ✅');
   console.log('📰 Real-time news integration: ✅');
   console.log('📊 Fear & Greed Index: ✅');
   console.log('🎨 Clean professional responses: ✅');
-  console.log('🚨 Price alerts + monitoring: ✅');
-  console.log('📊 LIVE price monitoring (15s): ✅');
-  console.log('🔄 Continuous background monitoring: ✅');
+  console.log('🚨 LIVE price alerts + monitoring: ✅');
+  console.log('📊 LIVE price monitoring (30s): ✅');
+  console.log('🔄 Real-time background monitoring: ✅');
   console.log('👥 Group mode: ✅ Everyone can use commands!');
   console.log('🤖 Powered by Fentrix.Ai: ✅');
   console.log('==========================================');
   console.log('🔥 ALL FEATURES OPERATIONAL - BOT IS LIVE!');
-  console.log('📝 Test with: !test');
+  console.log('📝 Test with: !test, !stock AAPL, !crypto bitcoin');
+  console.log('🚨 Test alerts with: !alert AAPL $190.00');
   console.log('🚀 Add bot to WhatsApp groups and start trading!');
   console.log('==========================================\n');
   
-  // Set the bot client for alert service notifications
+  // Connect alert service to bot client
   if (alertService) {
     try {
       alertService.setBotClient(client);
       console.log('✅ Alert service connected to bot client');
+      
+      // Connect alert service to stock service for real-time monitoring
+      if (stockService) {
+        alertService.setStockService(stockService);
+        console.log('✅ Alert service connected to stock service');
+        console.log('🔄 Real-time price monitoring will start automatically');
+      } else {
+        console.log('⚠️ Stock service not available for alert monitoring');
+      }
+      
     } catch (error) {
       console.error('❌ Alert service connection failed:', error.message);
     }
+  } else {
+    console.log('⚠️ Alert service not available');
   }
   
-  // Start continuous price monitoring for alerts
-  if (alertService && stockService) {
-    try {
-      console.log('🔄 Starting continuous price monitoring...');
-      alertService.startMonitoring(stockService);
-      console.log('✅ Price monitoring started - 15 second intervals');
-    } catch (error) {
-      console.error('❌ Price monitoring startup failed:', error.message);
-    }
+  // Additional service status check
+  console.log('\n📊 FINAL SERVICE STATUS CHECK:');
+  console.log(`📈 Stock Service: ${stockService ? '✅ Ready for real-time prices' : '❌ Not available'}`);
+  console.log(`🚨 Alert Service: ${alertService ? '✅ Ready for live monitoring' : '❌ Not available'}`);
+  console.log(`🧠 Sentiment Service: ${enhancedSentimentService ? '✅ Ready for analysis' : '❌ Not available'}`);
+  
+  if (stockService && alertService) {
+    console.log('\n🎉 PERFECT! All core services operational!');
+    console.log('💡 Bot ready for real-time stock/crypto trading assistance!');
   } else {
-    console.log('⚠️ Price monitoring not started - services not available');
+    console.log('\n⚠️ Some services unavailable - bot running in limited mode');
   }
+  
+  console.log('==========================================\n');
 });
 
 client.on('disconnected', (reason) => {
@@ -923,56 +955,45 @@ client.on('message_create', async (msg) => {
           }
         }
         
-        // Alerts list command - FIXED FUNCTIONALITY
+        // Alerts list command - WORKING FUNCTIONALITY
         else if (text.includes('!alerts')) {
           if (!alertService) {
             await sendBotResponse(msg, '❌ Alert service not available. Please try again later.');
             return;
           }
           
-          console.log('📋 LISTING ACTIVE ALERTS');
+          console.log('📋 LISTING ACTIVE ALERTS WITH WORKING SERVICE');
           
           try {
-            // Get alerts for this specific chat
-            const chatAlerts = alertService.getChatAlerts(msg.from);
-            const totalAlerts = alertService.getActiveAlerts().length;
-            
-            console.log(`✅ Found ${chatAlerts.length} alerts in this chat, ${totalAlerts} total`);
-            
-            if (chatAlerts.length === 0) {
-              await sendBotResponse(msg, '📋 *ACTIVE ALERTS IN THIS CHAT* 🚨\n\n❌ No active alerts in this chat\n\n💡 Set an alert with:\n🚨 !alert AAPL $187.50\n🚨 !alert bitcoin $45000\n🚨 !alert TSLA $200.00\n\n🔍 Live monitoring active (15s intervals)\n🤖 Powered by Fentrix.Ai');
+            // Use the working alert service's display method if available
+            if (alertService.formatAlertsDisplay) {
+              const alertsDisplay = alertService.formatAlertsDisplay(msg.from);
+              await sendBotResponse(msg, alertsDisplay);
             } else {
-              let alertsText = `📋 *ACTIVE ALERTS IN THIS CHAT* 🚨\n\n`;
+              // Fallback for simple alert services
+              const chatAlerts = alertService.getChatAlerts(msg.from);
+              const totalAlerts = alertService.getActiveAlerts().length;
               
-              // Separate stocks and crypto for better display
-              const stockAlerts = chatAlerts.filter(alert => alert.assetType === 'stock');
-              const cryptoAlerts = chatAlerts.filter(alert => alert.assetType === 'crypto');
-
-              if (stockAlerts.length > 0) {
-                alertsText += `📈 *STOCKS (${stockAlerts.length}):*\n`;
-                stockAlerts.forEach((alert, index) => {
+              console.log(`✅ Found ${chatAlerts.length} alerts in this chat, ${totalAlerts} total`);
+              
+              if (chatAlerts.length === 0) {
+                await sendBotResponse(msg, '📋 *ACTIVE ALERTS IN THIS CHAT* 🚨\n\n❌ No active alerts in this chat\n\n💡 Set an alert with:\n🚨 !alert AAPL $187.50\n🚨 !alert bitcoin $45000\n🚨 !alert TSLA $200.00\n\n🔍 Live monitoring active\n🤖 Powered by Fentrix.Ai');
+              } else {
+                let alertsText = `📋 *ACTIVE ALERTS IN THIS CHAT* 🚨\n\n`;
+                
+                chatAlerts.forEach((alert, index) => {
                   const timeAgo = getTimeAgo(alert.createdAt);
-                  const directionEmoji = alert.alertDirection === 'up' ? '⬆️' : alert.alertDirection === 'down' ? '⬇️' : '🎯';
-                  alertsText += `${index + 1}. 📊 *${alert.symbol}* - Target: $${alert.targetPrice.toLocaleString()} ${directionEmoji}\n`;
+                  const directionEmoji = alert.direction === 'up' ? '⬆️' : alert.direction === 'down' ? '⬇️' : '🎯';
+                  alertsText += `${index + 1}. *${alert.symbol}* - Target: $${alert.targetPrice.toLocaleString()} ${directionEmoji}\n`;
                   alertsText += `   👤 By: ${alert.userName} | ⏰ ${timeAgo}\n\n`;
                 });
+                
+                alertsText += `🔍 *Live monitoring active*\n`;
+                alertsText += `📊 Total alerts: ${totalAlerts}\n`;
+                alertsText += '🤖 *Powered by Fentrix.Ai*';
+                
+                await sendBotResponse(msg, alertsText);
               }
-
-              if (cryptoAlerts.length > 0) {
-                alertsText += `🪙 *CRYPTO (${cryptoAlerts.length}):*\n`;
-                cryptoAlerts.forEach((alert, index) => {
-                  const timeAgo = getTimeAgo(alert.createdAt);
-                  const directionEmoji = alert.alertDirection === 'up' ? '⬆️' : alert.alertDirection === 'down' ? '⬇️' : '🎯';
-                  alertsText += `${index + 1}. 🪙 *${alert.symbol}* - Target: $${alert.targetPrice.toLocaleString()} ${directionEmoji}\n`;
-                  alertsText += `   👤 By: ${alert.userName} | ⏰ ${timeAgo}\n\n`;
-                });
-              }
-              
-              alertsText += `🔍 *Live monitoring active* (15s intervals)\n`;
-              alertsText += `📊 Total alerts across all chats: ${totalAlerts}\n`;
-              alertsText += '🤖 *Powered by Fentrix.Ai*';
-              
-              await sendBotResponse(msg, alertsText);
             }
             
           } catch (error) {
