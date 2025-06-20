@@ -8,6 +8,13 @@ module.exports = {
   
   ALPHA_VANTAGE_API_KEY: process.env.ALPHA_VANTAGE_API_KEY || '18PO9ZL6HV4F00C6',
   
+  // API Endpoints for services
+  STOCK_API_BASE: 'https://www.alphavantage.co/query',
+  CRYPTO_API_BASE: 'https://api.coingecko.com/api/v3',
+  
+  // Optional API (not required for basic functionality)
+  FINANCIAL_MODELING_PREP_API_KEY: process.env.FINANCIAL_MODELING_PREP_API_KEY || '',
+  
   // Bot Configuration
   BOT_NAME: process.env.BOT_NAME || 'Fentrix Stock Bot',
   COMMAND_PREFIX: process.env.COMMAND_PREFIX || '!',
