@@ -4,18 +4,10 @@ FROM ghcr.io/puppeteer/puppeteer:21.6.1
 # Set working directory
 WORKDIR /app
 
-# Switch back to root to install additional dependencies
+# Switch to root to install dependencies and copy files
 USER root
 
-# Install additional system dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    wget \
-    gnupg \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy package files
+# Copy package files first for better Docker layer caching
 COPY package*.json ./
 
 # Install Node.js dependencies
@@ -29,7 +21,7 @@ ENV NODE_ENV=production
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
-# Create necessary directories and set permissions
+# Create necessary directories and set proper permissions
 RUN mkdir -p /app/session \
     && chown -R pptruser:pptruser /app
 
