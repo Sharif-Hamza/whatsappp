@@ -89,8 +89,45 @@ const client = new Client({
       '--single-process',
       '--disable-gpu',
       '--disable-web-security',
-      '--disable-features=VizDisplayCompositor'
-    ]
+      '--disable-features=VizDisplayCompositor',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding',
+      '--disable-extensions',
+      '--disable-plugins',
+      '--disable-default-apps',
+      '--disable-sync',
+      '--metrics-recording-only',
+      '--no-default-browser-check',
+      '--no-first-run',
+      '--mute-audio',
+      '--hide-scrollbars',
+      '--disable-logging',
+      '--disable-gl-drawing-for-tests',
+      '--disable-ipc-flooding-protection',
+      '--disable-hang-monitor',
+      '--disable-prompt-on-repost',
+      '--disable-domain-reliability',
+      '--disable-component-extensions-with-background-pages',
+      '--disable-background-networking',
+      '--disable-breakpad',
+      '--disable-client-side-phishing-detection',
+      '--disable-component-update',
+      '--disable-default-apps',
+      '--disable-field-trial-config',
+      '--disable-ipc-flooding-protection',
+      '--disable-back-forward-cache',
+      '--enable-features=NetworkService,NetworkServiceInProcess',
+      '--force-color-profile=srgb',
+      '--disable-features=TranslateUI',
+      '--disable-blink-features=AutomationControlled',
+      '--user-data-dir=/tmp',
+      '--data-path=/tmp',
+      '--disk-cache-dir=/tmp',
+      '--remote-debugging-port=9222',
+      '--remote-debugging-address=0.0.0.0'
+    ],
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
   }
 });
 
@@ -390,20 +427,54 @@ process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
 });
 
-// Initialize WhatsApp client
+// Initialize WhatsApp client with enhanced error handling
 console.log('🚀 Initializing WhatsApp client...');
 console.log('📱 Preparing to generate QR code...');
 
-try {
-  client.initialize();
-  console.log('✅ WhatsApp client initialization started');
-} catch (error) {
-  console.error('❌ WhatsApp client initialization failed:', error);
+// Add timeout and retry logic
+let initializationAttempts = 0;
+const maxAttempts = 3;
+
+function initializeClient() {
+  initializationAttempts++;
+  console.log(`🔄 Initialization attempt ${initializationAttempts}/${maxAttempts}`);
+  
+  try {
+    client.initialize()
+      .then(() => {
+        console.log('✅ WhatsApp client initialization started successfully');
+      })
+      .catch((error) => {
+        console.error('❌ WhatsApp client initialization failed:', error.message);
+        
+        if (initializationAttempts < maxAttempts) {
+          console.log(`🔄 Retrying in 10 seconds... (Attempt ${initializationAttempts + 1}/${maxAttempts})`);
+          setTimeout(initializeClient, 10000);
+        } else {
+          console.error('💥 Maximum initialization attempts reached. Bot will continue with limited functionality.');
+          console.log('🌐 Express server and health checks will remain operational');
+          console.log('📊 Stock/crypto data fetching will work without WhatsApp');
+        }
+      });
+  } catch (error) {
+    console.error('❌ WhatsApp client initialization error:', error);
+    
+    if (initializationAttempts < maxAttempts) {
+      console.log(`🔄 Retrying in 10 seconds... (Attempt ${initializationAttempts + 1}/${maxAttempts})`);
+      setTimeout(initializeClient, 10000);
+    } else {
+      console.error('💥 Maximum initialization attempts reached. Bot will continue with limited functionality.');
+    }
+  }
 }
+
+// Start initialization
+initializeClient();
 
 console.log('\n📋 FENTRIX STOCK BOT - RAILWAY DEPLOYMENT');
 console.log('🌐 Express server: ✅ Running');
 console.log('📱 WhatsApp client: 🔄 Initializing...');
 console.log('🔍 Watch logs for QR code...');
+console.log('💡 If Chrome issues persist, bot will run with API-only functionality');
 console.log('🤖 Professional market analysis bot powered by Fentrix.Ai');
 console.log('🚀 DEPLOYMENT SUCCESSFUL!\n'); 
