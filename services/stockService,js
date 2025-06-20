@@ -1,10 +1,40 @@
 const axios = require('axios');
-const config = require('../config');
+
+// Try to load config with error handling
+let config;
+try {
+  config = require('../config');
+  console.log('✅ Config loaded in stockService');
+} catch (error) {
+  console.error('❌ Config loading failed in stockService:', error.message);
+  // Fallback config
+  config = {
+    ALPHA_VANTAGE_API_KEY: process.env.ALPHA_VANTAGE_API_KEY || '18PO9ZL6HV4F00C6',
+    STOCK_API_BASE: 'https://www.alphavantage.co/query',
+    CRYPTO_API_BASE: 'https://api.coingecko.com/api/v3',
+    FINANCIAL_MODELING_PREP_API_KEY: process.env.FINANCIAL_MODELING_PREP_API_KEY || ''
+  };
+}
 
 class StockService {
   constructor() {
-    this.alphaVantageKey = config.ALPHA_VANTAGE_API_KEY;
-    this.fmpKey = config.FINANCIAL_MODELING_PREP_API_KEY;
+    try {
+      this.alphaVantageKey = config.ALPHA_VANTAGE_API_KEY;
+      this.fmpKey = config.FINANCIAL_MODELING_PREP_API_KEY;
+      
+      console.log('📈 StockService initialized');
+      console.log(`📊 Alpha Vantage Key: ${this.alphaVantageKey ? 'Set' : 'Missing'}`);
+      console.log(`🌐 Stock API Base: ${config.STOCK_API_BASE}`);
+      console.log(`🪙 Crypto API Base: ${config.CRYPTO_API_BASE}`);
+      
+      if (!this.alphaVantageKey) {
+        console.warn('⚠️ Alpha Vantage API key not found - stock data may be limited');
+      }
+      
+    } catch (error) {
+      console.error('❌ StockService constructor failed:', error.message);
+      throw error;
+    }
   }
 
   /**
@@ -14,26 +44,40 @@ class StockService {
    */
   async getStockPrice(symbol) {
     try {
+      console.log(`📈 Fetching stock data for: ${symbol}`);
+      
+      if (!this.alphaVantageKey) {
+        throw new Error('Alpha Vantage API key not configured');
+      }
+
       // Using Alpha Vantage for real-time stock data
       const response = await axios.get(config.STOCK_API_BASE, {
         params: {
           function: 'GLOBAL_QUOTE',
           symbol: symbol.toUpperCase(),
           apikey: this.alphaVantageKey
-        }
+        },
+        timeout: 15000 // 15 second timeout
       });
+
+      console.log(`📊 API Response status: ${response.status}`);
+      
+      if (!response.data) {
+        throw new Error('No data received from Alpha Vantage');
+      }
 
       const data = response.data['Global Quote'];
       
       if (!data || Object.keys(data).length === 0) {
-        throw new Error(`Stock symbol "${symbol}" not found`);
+        console.log('❌ Empty data response:', response.data);
+        throw new Error(`Stock symbol "${symbol}" not found or API limit reached`);
       }
 
       const price = parseFloat(data['05. price']);
       const change = parseFloat(data['09. change']);
       const changePercent = data['10. change percent'].replace('%', '');
 
-      return {
+      const result = {
         symbol: data['01. symbol'],
         price: price,
         change: change,
@@ -41,9 +85,23 @@ class StockService {
         lastUpdated: data['07. latest trading day'],
         currency: 'USD'
       };
+
+      console.log(`✅ Stock data retrieved: ${symbol} = $${price}`);
+      return result;
+      
     } catch (error) {
-      console.error('Error fetching stock price:', error.message);
-      throw new Error(`Failed to fetch stock price for ${symbol}: ${error.message}`);
+      console.error(`❌ Stock price fetch error for ${symbol}:`, error.message);
+      
+      // Provide helpful error messages
+      if (error.message.includes('timeout')) {
+        throw new Error(`Request timeout for ${symbol} - API may be slow`);
+      } else if (error.message.includes('404') || error.message.includes('not found')) {
+        throw new Error(`Stock symbol "${symbol}" not found`);
+      } else if (error.message.includes('API limit') || error.message.includes('rate limit')) {
+        throw new Error(`API rate limit exceeded - try again in a moment`);
+      } else {
+        throw new Error(`Failed to fetch stock price for ${symbol}: ${error.message}`);
+      }
     }
   }
 
@@ -54,7 +112,9 @@ class StockService {
    */
   async getCryptoPrice(coinId) {
     try {
-      // Using CoinGecko API (free tier)
+      console.log(`🪙 Fetching crypto data for: ${coinId}`);
+      
+      // Using CoinGecko API (free tier, no API key required)
       const response = await axios.get(`${config.CRYPTO_API_BASE}/simple/price`, {
         params: {
           ids: coinId.toLowerCase(),
@@ -62,16 +122,25 @@ class StockService {
           include_24hr_change: true,
           include_market_cap: true,
           include_24hr_vol: true
-        }
+        },
+        timeout: 15000 // 15 second timeout
       });
+
+      console.log(`📊 Crypto API Response status: ${response.status}`);
+
+      if (!response.data) {
+        throw new Error('No data received from CoinGecko');
+      }
 
       const data = response.data[coinId.toLowerCase()];
       
       if (!data) {
+        console.log('❌ Crypto not found:', coinId);
+        console.log('Available data keys:', Object.keys(response.data));
         throw new Error(`Cryptocurrency "${coinId}" not found`);
       }
 
-      return {
+      const result = {
         symbol: coinId.toUpperCase(),
         price: data.usd,
         change24h: data.usd_24h_change || 0,
@@ -79,9 +148,21 @@ class StockService {
         volume24h: data.usd_24h_vol || 0,
         currency: 'USD'
       };
+
+      console.log(`✅ Crypto data retrieved: ${coinId} = $${data.usd}`);
+      return result;
+      
     } catch (error) {
-      console.error('Error fetching crypto price:', error.message);
-      throw new Error(`Failed to fetch crypto price for ${coinId}: ${error.message}`);
+      console.error(`❌ Crypto price fetch error for ${coinId}:`, error.message);
+      
+      // Provide helpful error messages
+      if (error.message.includes('timeout')) {
+        throw new Error(`Request timeout for ${coinId} - API may be slow`);
+      } else if (error.message.includes('404') || error.message.includes('not found')) {
+        throw new Error(`Cryptocurrency "${coinId}" not found`);
+      } else {
+        throw new Error(`Failed to fetch crypto price for ${coinId}: ${error.message}`);
+      }
     }
   }
 
@@ -92,13 +173,21 @@ class StockService {
    */
   async searchSymbols(query) {
     try {
+      console.log(`🔍 Searching symbols for: ${query}`);
+      
+      if (!this.alphaVantageKey) {
+        console.warn('⚠️ Cannot search symbols - Alpha Vantage API key not configured');
+        return [];
+      }
+
       // Search stocks using Alpha Vantage
       const stockResponse = await axios.get(config.STOCK_API_BASE, {
         params: {
           function: 'SYMBOL_SEARCH',
           keywords: query,
           apikey: this.alphaVantageKey
-        }
+        },
+        timeout: 10000
       });
 
       const stockMatches = stockResponse.data.bestMatches || [];
@@ -110,7 +199,7 @@ class StockService {
         region: match['4. region']
       }));
     } catch (error) {
-      console.error('Error searching symbols:', error.message);
+      console.error('❌ Symbol search error:', error.message);
       return [];
     }
   }
@@ -122,41 +211,98 @@ class StockService {
    * @returns {string} Formatted price message
    */
   formatPriceDisplay(priceData, type = 'stock') {
-    const { symbol, price, change, changePercent, change24h, lastUpdated, marketCap, volume24h } = priceData;
+    try {
+      const { symbol, price, change, changePercent, change24h, lastUpdated, marketCap, volume24h } = priceData;
+      
+      let emoji = '📈';
+      let changeValue = type === 'stock' ? change : change24h;
+      let changePercentValue = type === 'stock' ? changePercent : change24h;
+      
+      if (changeValue < 0) {
+        emoji = '📉';
+      } else if (changeValue === 0) {
+        emoji = '➡️';
+      }
+
+      const formattedPrice = `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
+      const formattedChange = changeValue >= 0 ? `+${changeValue.toFixed(2)}` : changeValue.toFixed(2);
+      const formattedChangePercent = changePercentValue >= 0 ? `+${changePercentValue.toFixed(2)}%` : `${changePercentValue.toFixed(2)}%`;
+
+      let message = `${emoji} *${symbol}* ${type === 'crypto' ? '🪙' : '📈'}\n`;
+      message += `💰 *Price:* ${formattedPrice}\n`;
+      message += `📊 *Change:* ${formattedChange} (${formattedChangePercent})\n`;
+      
+      if (type === 'crypto') {
+        if (marketCap > 0) {
+          message += `🏪 *Market Cap:* $${(marketCap / 1e9).toFixed(2)}B\n`;
+        }
+        if (volume24h > 0) {
+          message += `📈 *24h Volume:* $${(volume24h / 1e6).toFixed(2)}M\n`;
+        }
+      } else {
+        message += `📅 *Last Updated:* ${lastUpdated}\n`;
+      }
+      
+      message += `⏰ *Time:* ${new Date().toLocaleString()}\n`;
+      message += `🤖 *Powered by Fentrix.Ai*`;
+      
+      return message;
+    } catch (error) {
+      console.error('❌ Price formatting error:', error.message);
+      return `❌ Error formatting price data for ${priceData?.symbol || 'unknown symbol'}`;
+    }
+  }
+
+  /**
+   * Test service functionality
+   * @returns {Promise<Object>} Test results
+   */
+  async testService() {
+    console.log('🧪 Testing StockService...');
     
-    let emoji = '📈';
-    let changeValue = type === 'stock' ? change : change24h;
-    let changePercentValue = type === 'stock' ? changePercent : change24h;
-    
-    if (changeValue < 0) {
-      emoji = '📉';
-    } else if (changeValue === 0) {
-      emoji = '➡️';
+    const results = {
+      stockTest: false,
+      cryptoTest: false,
+      stockError: null,
+      cryptoError: null
+    };
+
+    // Test stock API
+    try {
+      console.log('📈 Testing stock API with AAPL...');
+      const stockData = await this.getStockPrice('AAPL');
+      results.stockTest = stockData && stockData.price > 0;
+      console.log('✅ Stock test passed');
+    } catch (error) {
+      results.stockError = error.message;
+      console.log('❌ Stock test failed:', error.message);
     }
 
-    const formattedPrice = `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
-    const formattedChange = changeValue >= 0 ? `+${changeValue.toFixed(2)}` : changeValue.toFixed(2);
-    const formattedChangePercent = changePercentValue >= 0 ? `+${changePercentValue.toFixed(2)}%` : `${changePercentValue.toFixed(2)}%`;
-
-    let message = `${emoji} *${symbol}*\n`;
-    message += `💰 Price: ${formattedPrice}\n`;
-    message += `📊 Change: ${formattedChange} (${formattedChangePercent})\n`;
-    
-    if (type === 'crypto') {
-      if (marketCap > 0) {
-        message += `🏪 Market Cap: $${(marketCap / 1e9).toFixed(2)}B\n`;
-      }
-      if (volume24h > 0) {
-        message += `📈 24h Volume: $${(volume24h / 1e6).toFixed(2)}M\n`;
-      }
-    } else {
-      message += `📅 Last Updated: ${lastUpdated}\n`;
+    // Test crypto API
+    try {
+      console.log('🪙 Testing crypto API with bitcoin...');
+      const cryptoData = await this.getCryptoPrice('bitcoin');
+      results.cryptoTest = cryptoData && cryptoData.price > 0;
+      console.log('✅ Crypto test passed');
+    } catch (error) {
+      results.cryptoError = error.message;
+      console.log('❌ Crypto test failed:', error.message);
     }
-    
-    message += `⏰ ${new Date().toLocaleString()}`;
-    
-    return message;
+
+    return results;
   }
 }
 
-module.exports = new StockService(); 
+// Export singleton instance
+const stockServiceInstance = new StockService();
+
+// Test the service on startup
+stockServiceInstance.testService()
+  .then(results => {
+    console.log('🧪 StockService test results:', results);
+  })
+  .catch(error => {
+    console.error('❌ StockService test failed:', error.message);
+  });
+
+module.exports = stockServiceInstance; 
