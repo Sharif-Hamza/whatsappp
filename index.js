@@ -123,49 +123,258 @@ app.get('/qr', (req, res) => {
           <p>🔄 The bot is still initializing...</p>
           <p>📱 Refresh this page in a few seconds.</p>
           <button onclick="location.reload()">🔄 Refresh</button>
+          <script>
+            // Auto-refresh every 5 seconds until QR code is available
+            setTimeout(() => location.reload(), 5000);
+          </script>
         </body>
       </html>
     `);
     return;
   }
   
+  // Escape the QR code data properly for HTML
+  const escapedQRCode = currentQRCode.replace(/'/g, "\\'").replace(/"/g, '\\"');
+  
   res.send(`
     <html>
       <head>
         <title>Fentrix Stock Bot - QR Code</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { 
+            font-family: Arial, sans-serif; 
+            text-align: center; 
+            padding: 20px; 
+            background: #f0f0f0; 
+            margin: 0;
+          }
+          .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+          }
+          .qr-container { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 15px; 
+            display: inline-block; 
+            margin: 20px; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+          }
+          .instructions { 
+            max-width: 600px; 
+            margin: 0 auto; 
+            text-align: left; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 10px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+          }
+          button:hover {
+            background: #0056b3;
+          }
+          .debug {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            text-align: left;
+          }
+        </style>
       </head>
-      <body style="font-family: Arial; text-align: center; padding: 20px; background: #f0f0f0;">
-        <h1>📱 Fentrix Stock Bot - WhatsApp QR Code</h1>
-        <div style="background: white; padding: 20px; border-radius: 10px; display: inline-block; margin: 20px;">
-          <div id="qrcode" style="background: white; padding: 20px;"></div>
+      <body>
+        <div class="container">
+          <h1>📱 Fentrix Stock Bot - WhatsApp QR Code</h1>
+          
+          <div class="qr-container">
+            <div id="qrcode-canvas"></div>
+            <div id="qrcode-fallback" style="display: none;">
+              <p>🔄 Loading QR Code...</p>
+              <div class="debug">
+                <strong>Debug Info:</strong><br>
+                QR Code Length: ${currentQRCode.length} characters<br>
+                First 50 chars: ${currentQRCode.substring(0, 50)}...
+              </div>
+            </div>
+          </div>
+          
+          <div class="instructions">
+            <h3>📋 Instructions:</h3>
+            <ol>
+              <li><strong>Open WhatsApp</strong> on your dedicated bot phone</li>
+              <li><strong>Go to Settings</strong> → <strong>Linked Devices</strong></li>
+              <li><strong>Tap "Link a Device"</strong></li>
+              <li><strong>Scan the QR code above</strong></li>
+              <li><strong>Bot will connect</strong> and be ready to use!</li>
+            </ol>
+            
+            <p><strong>⚠️ Important:</strong> Use a separate WhatsApp account for the bot, not your personal account!</p>
+          </div>
+          
+          <button onclick="location.reload()">🔄 Refresh QR Code</button>
+          <button onclick="toggleDebug()">🔧 Toggle Debug Info</button>
         </div>
-        <div style="max-width: 600px; margin: 0 auto; text-align: left;">
-          <h3>📋 Instructions:</h3>
-          <ol>
-            <li><strong>Open WhatsApp</strong> on your dedicated bot phone</li>
-            <li><strong>Go to Settings</strong> → Linked Devices</li>
-            <li><strong>Tap "Link a Device"</strong></li>
-            <li><strong>Scan the QR code above</strong></li>
-            <li><strong>Bot will connect</strong> and be ready to use!</li>
-          </ol>
-        </div>
-        <button onclick="location.reload()" style="margin: 20px; padding: 10px 20px; font-size: 16px;">🔄 Refresh QR Code</button>
         
+        <!-- Multiple QR code libraries for better compatibility -->
         <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+        
         <script>
-          QRCode.toCanvas(document.getElementById('qrcode'), '${currentQRCode}', {
-            width: 300,
-            margin: 2,
-            color: {
-              dark: '#000000',
-              light: '#FFFFFF'
+          console.log('QR Code page loaded');
+          console.log('QR Code data length:', '${currentQRCode.length}');
+          
+          let qrCodeData = '${escapedQRCode}';
+          console.log('QR Code data (first 100 chars):', qrCodeData.substring(0, 100));
+          
+          function toggleDebug() {
+            const debug = document.getElementById('qrcode-fallback');
+            debug.style.display = debug.style.display === 'none' ? 'block' : 'none';
+          }
+          
+          // Try multiple methods to render QR code
+          function renderQRCode() {
+            const container = document.getElementById('qrcode-canvas');
+            
+            // Method 1: Try qrcode.js with canvas
+            if (typeof QRCode !== 'undefined') {
+              console.log('Trying QRCode.js...');
+              try {
+                // Clear container
+                container.innerHTML = '<canvas id="qr-canvas"></canvas>';
+                
+                QRCode.toCanvas(document.getElementById('qr-canvas'), qrCodeData, {
+                  width: 350,
+                  height: 350,
+                  margin: 3,
+                  color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                  },
+                  errorCorrectionLevel: 'M'
+                }, function (error) {
+                  if (error) {
+                    console.error('QRCode.js canvas error:', error);
+                    tryMethod2();
+                  } else {
+                    console.log('✅ QRCode.js canvas success!');
+                  }
+                });
+                return;
+              } catch (error) {
+                console.error('QRCode.js canvas failed:', error);
+              }
             }
-          }, function (error) {
-            if (error) {
-              document.getElementById('qrcode').innerHTML = '<p>❌ Error displaying QR code</p>';
+            
+            tryMethod2();
+          }
+          
+          // Method 2: Try qrcode.js with SVG
+          function tryMethod2() {
+            console.log('Trying QRCode.js SVG...');
+            const container = document.getElementById('qrcode-canvas');
+            
+            if (typeof QRCode !== 'undefined') {
+              try {
+                QRCode.toString(qrCodeData, {
+                  type: 'svg',
+                  width: 350,
+                  margin: 3,
+                  color: {
+                    dark: '#000000',
+                    light: '#FFFFFF'
+                  }
+                }, function (error, string) {
+                  if (error) {
+                    console.error('QRCode.js SVG error:', error);
+                    tryMethod3();
+                  } else {
+                    container.innerHTML = string;
+                    console.log('✅ QRCode.js SVG success!');
+                  }
+                });
+                return;
+              } catch (error) {
+                console.error('QRCode.js SVG failed:', error);
+              }
             }
-          });
+            
+            tryMethod3();
+          }
+          
+          // Method 3: Try QRious library
+          function tryMethod3() {
+            console.log('Trying QRious...');
+            const container = document.getElementById('qrcode-canvas');
+            
+            if (typeof QRious !== 'undefined') {
+              try {
+                container.innerHTML = '<canvas id="qr-canvas-2"></canvas>';
+                const canvas = document.getElementById('qr-canvas-2');
+                
+                const qr = new QRious({
+                  element: canvas,
+                  value: qrCodeData,
+                  size: 350,
+                  level: 'M'
+                });
+                
+                console.log('✅ QRious success!');
+                return;
+              } catch (error) {
+                console.error('QRious failed:', error);
+              }
+            }
+            
+            tryMethod4();
+          }
+          
+          // Method 4: Google Charts API fallback
+          function tryMethod4() {
+            console.log('Trying Google Charts API...');
+            const container = document.getElementById('qrcode-canvas');
+            
+            try {
+              const encodedData = encodeURIComponent(qrCodeData);
+              const googleQRUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=350x350&data=' + encodedData;
+              
+              container.innerHTML = '<img src="' + googleQRUrl + '" alt="QR Code" style="max-width: 350px; height: auto;" onerror="showFallback()">';
+              console.log('✅ Google Charts API used!');
+            } catch (error) {
+              console.error('Google Charts API failed:', error);
+              showFallback();
+            }
+          }
+          
+          function showFallback() {
+            console.log('All methods failed, showing fallback');
+            const container = document.getElementById('qrcode-canvas');
+            const fallback = document.getElementById('qrcode-fallback');
+            
+            container.innerHTML = '<p style="color: red;">❌ QR Code rendering failed</p>';
+            fallback.style.display = 'block';
+          }
+          
+          // Start rendering process
+          console.log('Starting QR code rendering...');
+          renderQRCode();
+          
+          // Auto-refresh every 30 seconds to get new QR codes
+          setInterval(() => {
+            console.log('Auto-refreshing for new QR code...');
+            location.reload();
+          }, 30000);
         </script>
       </body>
     </html>
