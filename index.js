@@ -393,20 +393,56 @@ let stockService, enhancedSentimentService, alertService;
 
 try {
   console.log('📦 Loading service modules...');
-  stockService = require('./services/stockService');
-  console.log('✅ Stock service loaded');
   
-  enhancedSentimentService = require('./services/enhancedSentimentService');
-  console.log('✅ Enhanced sentiment service loaded');
+  // Load each service individually with specific error handling
+  try {
+    stockService = require('./services/stockService');
+    console.log('✅ Stock service loaded successfully');
+  } catch (stockError) {
+    console.error('❌ Stock service loading failed:', stockError.message);
+    console.error('📝 Stock service error details:', stockError.stack);
+    stockService = null;
+  }
   
-  alertService = require('./services/alertService');
-  console.log('✅ Alert service loaded');
+  try {
+    enhancedSentimentService = require('./services/enhancedSentimentService');
+    console.log('✅ Enhanced sentiment service loaded successfully');
+  } catch (sentimentError) {
+    console.error('❌ Enhanced sentiment service loading failed:', sentimentError.message);
+    console.error('📝 Sentiment service error details:', sentimentError.stack);
+    enhancedSentimentService = null;
+  }
   
-  console.log('🎉 ALL SERVICES LOADED SUCCESSFULLY!');
+  try {
+    alertService = require('./services/alertService');
+    console.log('✅ Alert service loaded successfully');
+  } catch (alertError) {
+    console.error('❌ Alert service loading failed:', alertError.message);
+    console.error('📝 Alert service error details:', alertError.stack);
+    alertService = null;
+  }
+  
+  // Summary of loaded services
+  const loadedServices = [];
+  if (stockService) loadedServices.push('Stock Service');
+  if (enhancedSentimentService) loadedServices.push('Sentiment Service');
+  if (alertService) loadedServices.push('Alert Service');
+  
+  if (loadedServices.length > 0) {
+    console.log(`🎉 Successfully loaded ${loadedServices.length}/3 services: ${loadedServices.join(', ')}`);
+  } else {
+    console.log('❌ NO SERVICES LOADED - Bot will run in basic mode');
+  }
+  
 } catch (error) {
-  console.error('❌ SERVICE LOADING ERROR:', error.message);
+  console.error('❌ CRITICAL SERVICE LOADING ERROR:', error.message);
   console.error('📝 Stack:', error.stack);
-  // Continue without services for now
+  console.log('🔧 Bot will continue without services - basic functionality only');
+  
+  // Set all services to null
+  stockService = null;
+  enhancedSentimentService = null;
+  alertService = null;
 }
 
 const client = new Client({
@@ -520,6 +556,19 @@ client.on('ready', () => {
       console.error('❌ Alert service connection failed:', error.message);
     }
   }
+  
+  // Start continuous price monitoring for alerts
+  if (alertService && stockService) {
+    try {
+      console.log('🔄 Starting continuous price monitoring...');
+      alertService.startMonitoring(stockService);
+      console.log('✅ Price monitoring started - 15 second intervals');
+    } catch (error) {
+      console.error('❌ Price monitoring startup failed:', error.message);
+    }
+  } else {
+    console.log('⚠️ Price monitoring not started - services not available');
+  }
 });
 
 client.on('disconnected', (reason) => {
@@ -561,10 +610,43 @@ client.on('message_create', async (msg) => {
           await sendBotResponse(msg, '🎉 *FENTRIX STOCK BOT OPERATIONAL ON RAILWAY!* 🚀\n\n📈 Real stock/crypto prices: ✅\n🌐 Professional sentiment analysis: ✅\n📰 Real-time news integration: ✅\n📊 Fear & Greed Index: ✅\n🎨 Clean professional responses: ✅\n🚨 Price alerts + LIVE monitoring (15s): ✅\n📊 Continuous background monitoring: ✅\n👥 Group mode: Everyone can use commands ✅\n🤖 Powered by Fentrix.Ai: ✅\n🌐 24/7 Railway cloud hosting: ✅\n\n🔥 *ALL FEATURES OPERATIONAL!*\n\nTry: !stock AAPL or !alert bitcoin $45000\n\n🤖 Fentrix.Ai Professional Trading Bot');
         }
         
+        // Debug command - ADD FOR TROUBLESHOOTING
+        else if (text.includes('!debug')) {
+          console.log('🔧 DEBUG COMMAND');
+          
+          let debugInfo = '🔧 *DEBUG INFORMATION* 🛠️\n\n';
+          
+          // Service status
+          debugInfo += '📊 *SERVICE STATUS:*\n';
+          debugInfo += `• Stock Service: ${stockService ? '✅ Loaded' : '❌ Failed'}\n`;
+          debugInfo += `• Sentiment Service: ${enhancedSentimentService ? '✅ Loaded' : '❌ Failed'}\n`;
+          debugInfo += `• Alert Service: ${alertService ? '✅ Loaded' : '❌ Failed'}\n\n`;
+          
+          // Configuration status
+          debugInfo += '⚙️ *CONFIGURATION:*\n';
+          debugInfo += `• Alpha Vantage Key: ${config.ALPHA_VANTAGE_API_KEY ? '✅ Set' : '❌ Missing'}\n`;
+          debugInfo += `• DeepSeek Key: ${config.DEEPSEEK_API_KEY ? '✅ Set' : '❌ Missing'}\n`;
+          debugInfo += `• Stock API: ${config.STOCK_API_BASE ? '✅ Set' : '❌ Missing'}\n`;
+          debugInfo += `• Crypto API: ${config.CRYPTO_API_BASE ? '✅ Set' : '❌ Missing'}\n\n`;
+          
+          // Environment
+          debugInfo += '🌐 *ENVIRONMENT:*\n';
+          debugInfo += `• Node.js: ${process.version}\n`;
+          debugInfo += `• Environment: ${config.NODE_ENV}\n`;
+          debugInfo += `• Port: ${config.PORT}\n\n`;
+          
+          debugInfo += '💡 Try: !stock AAPL or !crypto bitcoin\n';
+          debugInfo += '🤖 Powered by Fentrix.Ai';
+          
+          await sendBotResponse(msg, debugInfo);
+        }
+        
         // Stock commands
         else if (text.startsWith('!stock ') || text.startsWith('!s ')) {
+          console.log(`📈 STOCK COMMAND DETECTED - Service status: ${stockService ? 'Available' : 'Not Available'}`);
+          
           if (!stockService) {
-            await sendBotResponse(msg, '❌ Stock service not available. Please try again later.');
+            await sendBotResponse(msg, '❌ Stock service not available. Try !debug to see what\'s wrong.\n\n🔧 This might be due to:\n• Missing API keys\n• Service loading errors\n• Network issues\n\n💡 Try again in a few moments or contact support.');
             return;
           }
           
@@ -640,6 +722,122 @@ client.on('message_create', async (msg) => {
           } catch (error) {
             console.log(`❌ Crypto fetch failed: ${error.message}`);
             await sendBotResponse(msg, `❌ Could not fetch crypto data for ${coin}\n\nError: ${error.message}\n\n💡 Try: bitcoin, ethereum, dogecoin, solana`);
+          }
+        }
+        
+        // Alert commands - ADD MISSING FUNCTIONALITY
+        else if (text.startsWith('!alert ')) {
+          if (!alertService) {
+            await sendBotResponse(msg, '❌ Alert service not available. Please try again later.');
+            return;
+          }
+          
+          const alertText = text.replace('!alert ', '').trim();
+          console.log(`🚨 PROCESSING ALERT: ${alertText}`);
+          
+          try {
+            await sendBotResponse(msg, '🔄 Setting up price alert...\n📊 Analyzing target price...\nPlease wait...');
+            
+            const result = await alertService.addAlert(alertText, msg.from);
+            console.log(`✅ Alert result: ${result.success}`);
+            
+            if (result.success) {
+              await sendBotResponse(msg, result.message);
+            } else {
+              await sendBotResponse(msg, `❌ Alert setup failed: ${result.message}`);
+            }
+            
+          } catch (error) {
+            console.log(`❌ Alert setup failed: ${error.message}`);
+            await sendBotResponse(msg, `❌ Could not set up alert: ${error.message}\n\n💡 Examples:\n🚨 !alert AAPL $187.50\n🚨 !alert bitcoin $45000\n🚨 !alert bitcoin 104,350\n\n🤖 Powered by Fentrix.Ai`);
+          }
+        }
+        
+        // Alerts list command - ADD MISSING FUNCTIONALITY
+        else if (text.includes('!alerts')) {
+          if (!alertService) {
+            await sendBotResponse(msg, '❌ Alert service not available. Please try again later.');
+            return;
+          }
+          
+          console.log('📋 LISTING ACTIVE ALERTS');
+          
+          try {
+            const alertsList = alertService.getActiveAlerts();
+            console.log(`✅ Found ${alertsList.length} active alerts`);
+            
+            if (alertsList.length === 0) {
+              await sendBotResponse(msg, '📋 *ACTIVE ALERTS* 🚨\n\n❌ No active alerts\n\n💡 Set an alert with:\n🚨 !alert AAPL $187.50\n🚨 !alert bitcoin $45000\n\n🤖 Powered by Fentrix.Ai');
+            } else {
+              let alertsText = '📋 *ACTIVE ALERTS* 🚨\n\n';
+              
+              alertsList.forEach((alert, index) => {
+                const direction = alert.direction === 'up' ? '⬆️ UP' : alert.direction === 'down' ? '⬇️ DOWN' : '🎯 EXACT';
+                alertsText += `${index + 1}. ${alert.symbol.toUpperCase()}\n`;
+                alertsText += `   💰 Target: $${alert.targetPrice.toLocaleString()}\n`;
+                alertsText += `   🎯 Direction: ${direction}\n`;
+                alertsText += `   ⏰ Created: ${new Date(alert.created).toLocaleString()}\n\n`;
+              });
+              
+              alertsText += '🔄 Live monitoring active (15s intervals)\n🤖 Powered by Fentrix.Ai';
+              await sendBotResponse(msg, alertsText);
+            }
+            
+          } catch (error) {
+            console.log(`❌ Alerts list failed: ${error.message}`);
+            await sendBotResponse(msg, `❌ Could not retrieve alerts: ${error.message}\n\n🤖 Powered by Fentrix.Ai`);
+          }
+        }
+        
+        // Sentiment analysis commands - ADD MISSING FUNCTIONALITY
+        else if (text.startsWith('!sentiment')) {
+          if (!enhancedSentimentService) {
+            await sendBotResponse(msg, '❌ Sentiment analysis service not available. Please try again later.');
+            return;
+          }
+          
+          const sentimentText = text.replace('!sentiment', '').trim();
+          console.log(`🧠 SENTIMENT ANALYSIS REQUEST: "${sentimentText}"`);
+          
+          try {
+            await sendBotResponse(msg, '🌐 Analyzing market sentiment with professional AI...\n📰 Fetching latest news and market data...\n📊 Getting Fear & Greed Index...\nPlease wait...');
+            
+            let sentiment;
+            if (sentimentText) {
+              // Specific symbol sentiment
+              const symbol = sentimentText.toUpperCase();
+              console.log(`🎯 Getting sentiment for specific symbol: ${symbol}`);
+              
+              // Try to get current price data for context
+              let priceData = null;
+              try {
+                if (stockService) {
+                  // Try as stock first
+                  try {
+                    priceData = await stockService.getStockPrice(symbol);
+                  } catch {
+                    // Try as crypto if stock fails
+                    priceData = await stockService.getCryptoPrice(symbol.toLowerCase());
+                  }
+                }
+              } catch (priceError) {
+                console.log(`⚠️ Could not fetch price data for ${symbol}: ${priceError.message}`);
+              }
+              
+              sentiment = await enhancedSentimentService.getEnhancedMarketSentiment(symbol, priceData);
+            } else {
+              // General market sentiment
+              console.log('🌐 Getting general market sentiment');
+              sentiment = await enhancedSentimentService.getEnhancedMarketSentiment();
+            }
+            
+            const formattedSentiment = enhancedSentimentService.formatEnhancedSentimentDisplay(sentiment);
+            await sendBotResponse(msg, formattedSentiment);
+            console.log('✅ ENHANCED SENTIMENT ANALYSIS SUCCESSFUL!');
+            
+          } catch (error) {
+            console.log(`❌ Sentiment analysis failed: ${error.message}`);
+            await sendBotResponse(msg, `❌ Sentiment analysis failed: ${error.message}\n\n💡 Examples:\n🧠 !sentiment - General market sentiment\n🧠 !sentiment AAPL - Apple sentiment\n🧠 !sentiment bitcoin - Bitcoin sentiment\n\n🤖 Powered by Fentrix.Ai`);
           }
         }
         
