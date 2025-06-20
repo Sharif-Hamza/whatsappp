@@ -41,8 +41,71 @@ app.get('/', (req, res) => {
       sentimentAnalysis: true,
       priceAlerts: true,
       liveMonitoring: true
+    },
+    endpoints: {
+      health: '/health',
+      testStock: '/api/stock/:symbol',
+      testCrypto: '/api/crypto/:coin'
     }
   });
+});
+
+// API endpoint for testing stock prices without WhatsApp
+app.get('/api/stock/:symbol', async (req, res) => {
+  try {
+    const symbol = req.params.symbol.toUpperCase();
+    console.log(`📈 API request for stock: ${symbol}`);
+    
+    if (!stockService) {
+      return res.status(503).json({ error: 'Stock service not available' });
+    }
+    
+    const stockData = await stockService.getStockPrice(symbol);
+    console.log(`✅ Stock data retrieved for ${symbol}`);
+    
+    res.json({
+      success: true,
+      symbol: symbol,
+      data: stockData,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error(`❌ Stock API error for ${req.params.symbol}:`, error.message);
+    res.status(400).json({
+      success: false,
+      error: error.message,
+      symbol: req.params.symbol
+    });
+  }
+});
+
+// API endpoint for testing crypto prices without WhatsApp
+app.get('/api/crypto/:coin', async (req, res) => {
+  try {
+    const coin = req.params.coin.toLowerCase();
+    console.log(`🪙 API request for crypto: ${coin}`);
+    
+    if (!stockService) {
+      return res.status(503).json({ error: 'Crypto service not available' });
+    }
+    
+    const cryptoData = await stockService.getCryptoPrice(coin);
+    console.log(`✅ Crypto data retrieved for ${coin}`);
+    
+    res.json({
+      success: true,
+      coin: coin,
+      data: cryptoData,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error(`❌ Crypto API error for ${req.params.coin}:`, error.message);
+    res.status(400).json({
+      success: false,
+      error: error.message,
+      coin: req.params.coin
+    });
+  }
 });
 
 // Start Express server IMMEDIATELY for health checks
@@ -99,7 +162,6 @@ const client = new Client({
       '--disable-sync',
       '--metrics-recording-only',
       '--no-default-browser-check',
-      '--no-first-run',
       '--mute-audio',
       '--hide-scrollbars',
       '--disable-logging',
@@ -113,21 +175,14 @@ const client = new Client({
       '--disable-breakpad',
       '--disable-client-side-phishing-detection',
       '--disable-component-update',
-      '--disable-default-apps',
       '--disable-field-trial-config',
-      '--disable-ipc-flooding-protection',
       '--disable-back-forward-cache',
       '--enable-features=NetworkService,NetworkServiceInProcess',
       '--force-color-profile=srgb',
       '--disable-features=TranslateUI',
-      '--disable-blink-features=AutomationControlled',
-      '--user-data-dir=/tmp',
-      '--data-path=/tmp',
-      '--disk-cache-dir=/tmp',
-      '--remote-debugging-port=9222',
-      '--remote-debugging-address=0.0.0.0'
+      '--disable-blink-features=AutomationControlled'
     ],
-    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined
+    executablePath: '/usr/bin/google-chrome-stable'
   }
 });
 
@@ -427,9 +482,11 @@ process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
 });
 
-// Initialize WhatsApp client with enhanced error handling
+// Initialize WhatsApp client with enhanced error handling and debugging
 console.log('🚀 Initializing WhatsApp client...');
 console.log('📱 Preparing to generate QR code...');
+console.log('🔍 Chrome executable path:', '/usr/bin/google-chrome-stable');
+console.log('🐳 Running in Docker container with Puppeteer image');
 
 // Add timeout and retry logic
 let initializationAttempts = 0;
@@ -438,32 +495,44 @@ const maxAttempts = 3;
 function initializeClient() {
   initializationAttempts++;
   console.log(`🔄 Initialization attempt ${initializationAttempts}/${maxAttempts}`);
+  console.log('⚙️  Puppeteer configuration: headless mode, optimized Chrome args');
   
   try {
     client.initialize()
       .then(() => {
         console.log('✅ WhatsApp client initialization started successfully');
+        console.log('📲 QR code should appear in logs shortly...');
       })
       .catch((error) => {
         console.error('❌ WhatsApp client initialization failed:', error.message);
+        console.error('🔍 Error details:', error);
+        
+        if (error.message.includes('Protocol error') || error.message.includes('Target closed')) {
+          console.log('🐛 Chrome protocol error detected - this usually means Chrome crashed');
+          console.log('🔧 Trying with different Chrome configuration...');
+        }
         
         if (initializationAttempts < maxAttempts) {
-          console.log(`🔄 Retrying in 10 seconds... (Attempt ${initializationAttempts + 1}/${maxAttempts})`);
-          setTimeout(initializeClient, 10000);
+          console.log(`🔄 Retrying in 15 seconds... (Attempt ${initializationAttempts + 1}/${maxAttempts})`);
+          setTimeout(initializeClient, 15000);
         } else {
-          console.error('💥 Maximum initialization attempts reached. Bot will continue with limited functionality.');
+          console.error('💥 Maximum initialization attempts reached.');
           console.log('🌐 Express server and health checks will remain operational');
           console.log('📊 Stock/crypto data fetching will work without WhatsApp');
+          console.log('💡 Bot will continue with API-only functionality');
+          console.log('🔧 You can still test: !stock AAPL or !crypto bitcoin via health endpoint');
         }
       });
   } catch (error) {
     console.error('❌ WhatsApp client initialization error:', error);
+    console.error('🔍 Stack trace:', error.stack);
     
     if (initializationAttempts < maxAttempts) {
-      console.log(`🔄 Retrying in 10 seconds... (Attempt ${initializationAttempts + 1}/${maxAttempts})`);
-      setTimeout(initializeClient, 10000);
+      console.log(`🔄 Retrying in 15 seconds... (Attempt ${initializationAttempts + 1}/${maxAttempts})`);
+      setTimeout(initializeClient, 15000);
     } else {
-      console.error('💥 Maximum initialization attempts reached. Bot will continue with limited functionality.');
+      console.error('💥 Maximum initialization attempts reached.');
+      console.log('🌐 Bot will continue with API-only functionality');
     }
   }
 }
@@ -473,7 +542,7 @@ initializeClient();
 
 console.log('\n📋 FENTRIX STOCK BOT - RAILWAY DEPLOYMENT');
 console.log('🌐 Express server: ✅ Running');
-console.log('📱 WhatsApp client: 🔄 Initializing...');
+console.log('📱 WhatsApp client: 🔄 Initializing with Puppeteer Docker image...');
 console.log('🔍 Watch logs for QR code...');
 console.log('💡 If Chrome issues persist, bot will run with API-only functionality');
 console.log('🤖 Professional market analysis bot powered by Fentrix.Ai');
