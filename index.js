@@ -13,6 +13,9 @@ const config = require('./config');
 const app = express();
 const PORT = config.PORT || 3000;
 
+// Global variable to store current QR code
+let currentQRCode = null;
+
 // Simple health check that doesn't depend on other services
 app.get('/health', (req, res) => {
   res.status(200).json({
@@ -108,6 +111,67 @@ app.get('/api/crypto/:coin', async (req, res) => {
   }
 });
 
+// Add QR code web endpoint
+app.get('/qr', (req, res) => {
+  if (!currentQRCode) {
+    res.send(`
+      <html>
+        <head><title>Fentrix Stock Bot - QR Code</title></head>
+        <body style="font-family: Arial; text-align: center; padding: 50px;">
+          <h1>🤖 Fentrix Stock Bot</h1>
+          <p>❌ No QR code available yet.</p>
+          <p>🔄 The bot is still initializing...</p>
+          <p>📱 Refresh this page in a few seconds.</p>
+          <button onclick="location.reload()">🔄 Refresh</button>
+        </body>
+      </html>
+    `);
+    return;
+  }
+  
+  res.send(`
+    <html>
+      <head>
+        <title>Fentrix Stock Bot - QR Code</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+      </head>
+      <body style="font-family: Arial; text-align: center; padding: 20px; background: #f0f0f0;">
+        <h1>📱 Fentrix Stock Bot - WhatsApp QR Code</h1>
+        <div style="background: white; padding: 20px; border-radius: 10px; display: inline-block; margin: 20px;">
+          <div id="qrcode" style="background: white; padding: 20px;"></div>
+        </div>
+        <div style="max-width: 600px; margin: 0 auto; text-align: left;">
+          <h3>📋 Instructions:</h3>
+          <ol>
+            <li><strong>Open WhatsApp</strong> on your dedicated bot phone</li>
+            <li><strong>Go to Settings</strong> → Linked Devices</li>
+            <li><strong>Tap "Link a Device"</strong></li>
+            <li><strong>Scan the QR code above</strong></li>
+            <li><strong>Bot will connect</strong> and be ready to use!</li>
+          </ol>
+        </div>
+        <button onclick="location.reload()" style="margin: 20px; padding: 10px 20px; font-size: 16px;">🔄 Refresh QR Code</button>
+        
+        <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+        <script>
+          QRCode.toCanvas(document.getElementById('qrcode'), '${currentQRCode}', {
+            width: 300,
+            margin: 2,
+            color: {
+              dark: '#000000',
+              light: '#FFFFFF'
+            }
+          }, function (error) {
+            if (error) {
+              document.getElementById('qrcode').innerHTML = '<p>❌ Error displaying QR code</p>';
+            }
+          });
+        </script>
+      </body>
+    </html>
+  `);
+});
+
 // Start Express server IMMEDIATELY for health checks
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🌐 EXPRESS SERVER RUNNING ON PORT ${PORT}`);
@@ -189,20 +253,28 @@ const client = new Client({
 let botResponses = new Set(); // Track bot responses to avoid loops
 
 client.on('qr', (qr) => {
+  // Store QR code for web endpoint
+  currentQRCode = qr;
+  
   console.log('\n🎯 QR CODE GENERATED!');
-  console.log('📱 SCAN THIS QR CODE WITH YOUR BOT WHATSAPP ACCOUNT:');
+  console.log('📱 SCAN QR CODE WITH YOUR BOT WHATSAPP ACCOUNT:');
   console.log('================================================');
   
-  // Generate QR code in terminal
+  // Generate smaller QR code for logs
   qrcode.generate(qr, { small: true });
   
   console.log('================================================');
+  console.log('');
+  console.log('🌐 BETTER QR CODE VIEWING:');
+  console.log('👉 Visit: https://YOUR-RAILWAY-APP-URL/qr');
+  console.log('📱 Scan the QR code from that webpage instead!');
+  console.log('');
   console.log('📋 INSTRUCTIONS:');
   console.log('1. Use your DEDICATED BOT WhatsApp account');
   console.log('2. Open WhatsApp on your phone');
   console.log('3. Go to Settings > Linked Devices');
   console.log('4. Tap "Link a Device"');
-  console.log('5. Scan the QR code above');
+  console.log('5. Scan the QR code from the webpage above');
   console.log('================================================\n');
 });
 
