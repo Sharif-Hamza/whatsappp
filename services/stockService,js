@@ -1,0 +1,162 @@
+const axios = require('axios');
+const config = require('../config');
+
+class StockService {
+  constructor() {
+    this.alphaVantageKey = config.ALPHA_VANTAGE_API_KEY;
+    this.fmpKey = config.FINANCIAL_MODELING_PREP_API_KEY;
+  }
+
+  /**
+   * Get stock price and basic info
+   * @param {string} symbol - Stock symbol (e.g., 'AAPL', 'GOOGL')
+   * @returns {Promise<Object>} Stock data
+   */
+  async getStockPrice(symbol) {
+    try {
+      // Using Alpha Vantage for real-time stock data
+      const response = await axios.get(config.STOCK_API_BASE, {
+        params: {
+          function: 'GLOBAL_QUOTE',
+          symbol: symbol.toUpperCase(),
+          apikey: this.alphaVantageKey
+        }
+      });
+
+      const data = response.data['Global Quote'];
+      
+      if (!data || Object.keys(data).length === 0) {
+        throw new Error(`Stock symbol "${symbol}" not found`);
+      }
+
+      const price = parseFloat(data['05. price']);
+      const change = parseFloat(data['09. change']);
+      const changePercent = data['10. change percent'].replace('%', '');
+
+      return {
+        symbol: data['01. symbol'],
+        price: price,
+        change: change,
+        changePercent: parseFloat(changePercent),
+        lastUpdated: data['07. latest trading day'],
+        currency: 'USD'
+      };
+    } catch (error) {
+      console.error('Error fetching stock price:', error.message);
+      throw new Error(`Failed to fetch stock price for ${symbol}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get cryptocurrency price
+   * @param {string} coinId - Crypto coin ID (e.g., 'bitcoin', 'ethereum')
+   * @returns {Promise<Object>} Crypto data
+   */
+  async getCryptoPrice(coinId) {
+    try {
+      // Using CoinGecko API (free tier)
+      const response = await axios.get(`${config.CRYPTO_API_BASE}/simple/price`, {
+        params: {
+          ids: coinId.toLowerCase(),
+          vs_currencies: 'usd',
+          include_24hr_change: true,
+          include_market_cap: true,
+          include_24hr_vol: true
+        }
+      });
+
+      const data = response.data[coinId.toLowerCase()];
+      
+      if (!data) {
+        throw new Error(`Cryptocurrency "${coinId}" not found`);
+      }
+
+      return {
+        symbol: coinId.toUpperCase(),
+        price: data.usd,
+        change24h: data.usd_24h_change || 0,
+        marketCap: data.usd_market_cap || 0,
+        volume24h: data.usd_24h_vol || 0,
+        currency: 'USD'
+      };
+    } catch (error) {
+      console.error('Error fetching crypto price:', error.message);
+      throw new Error(`Failed to fetch crypto price for ${coinId}: ${error.message}`);
+    }
+  }
+
+  /**
+   * Search for stock/crypto symbols
+   * @param {string} query - Search query
+   * @returns {Promise<Array>} Array of matching symbols
+   */
+  async searchSymbols(query) {
+    try {
+      // Search stocks using Alpha Vantage
+      const stockResponse = await axios.get(config.STOCK_API_BASE, {
+        params: {
+          function: 'SYMBOL_SEARCH',
+          keywords: query,
+          apikey: this.alphaVantageKey
+        }
+      });
+
+      const stockMatches = stockResponse.data.bestMatches || [];
+      
+      return stockMatches.slice(0, 5).map(match => ({
+        symbol: match['1. symbol'],
+        name: match['2. name'],
+        type: 'stock',
+        region: match['4. region']
+      }));
+    } catch (error) {
+      console.error('Error searching symbols:', error.message);
+      return [];
+    }
+  }
+
+  /**
+   * Format price display
+   * @param {Object} priceData - Price data object
+   * @param {string} type - 'stock' or 'crypto'
+   * @returns {string} Formatted price message
+   */
+  formatPriceDisplay(priceData, type = 'stock') {
+    const { symbol, price, change, changePercent, change24h, lastUpdated, marketCap, volume24h } = priceData;
+    
+    let emoji = '📈';
+    let changeValue = type === 'stock' ? change : change24h;
+    let changePercentValue = type === 'stock' ? changePercent : change24h;
+    
+    if (changeValue < 0) {
+      emoji = '📉';
+    } else if (changeValue === 0) {
+      emoji = '➡️';
+    }
+
+    const formattedPrice = `$${price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
+    const formattedChange = changeValue >= 0 ? `+${changeValue.toFixed(2)}` : changeValue.toFixed(2);
+    const formattedChangePercent = changePercentValue >= 0 ? `+${changePercentValue.toFixed(2)}%` : `${changePercentValue.toFixed(2)}%`;
+
+    let message = `${emoji} *${symbol}*\n`;
+    message += `💰 Price: ${formattedPrice}\n`;
+    message += `📊 Change: ${formattedChange} (${formattedChangePercent})\n`;
+    
+    if (type === 'crypto') {
+      if (marketCap > 0) {
+        message += `🏪 Market Cap: $${(marketCap / 1e9).toFixed(2)}B\n`;
+      }
+      if (volume24h > 0) {
+        message += `📈 24h Volume: $${(volume24h / 1e6).toFixed(2)}M\n`;
+      }
+    } else {
+      message += `📅 Last Updated: ${lastUpdated}\n`;
+    }
+    
+    message += `⏰ ${new Date().toLocaleString()}`;
+    
+    return message;
+  }
+}
+
+module.exports = new StockService(); 
