@@ -1,23 +1,43 @@
-const stockService = require('./stockService');
+// Import stockService with error handling
+let stockService;
+try {
+  stockService = require('./stockService');
+  console.log('✅ StockService loaded in AlertService');
+} catch (error) {
+  console.error('❌ Failed to load StockService in AlertService:', error.message);
+  stockService = null;
+}
 
 class AlertService {
   constructor() {
-    this.activeAlerts = new Map(); // Store alerts by chatId
-    this.monitoringInterval = null;
-    this.isMonitoring = false;
-    this.checkIntervalMs = 15000; // Check every 15 seconds for faster response
-    this.botClient = null; // Will be set by the main bot
-    this.cryptoSymbols = [
-      'bitcoin', 'ethereum', 'cardano', 'solana', 'dogecoin', 'ripple', 'litecoin',
-      'polkadot', 'chainlink', 'stellar', 'vechain', 'filecoin', 'tron', 'cosmos',
-      'algorand', 'avalanche', 'polygon', 'fantom', 'near', 'harmony', 'elrond',
-      'btc', 'eth', 'ada', 'sol', 'doge', 'xrp', 'ltc', 'dot', 'link', 'xlm',
-      'vet', 'fil', 'trx', 'atom', 'algo', 'avax', 'matic', 'ftm', 'one', 'egld'
-    ];
-    
-    // Start monitoring immediately when service is created
-    console.log('🚀 Alert Service initialized - starting continuous monitoring...');
-    this.startContinuousMonitoring();
+    try {
+      this.activeAlerts = new Map(); // Store alerts by chatId
+      this.monitoringInterval = null;
+      this.isMonitoring = false;
+      this.checkIntervalMs = 15000; // Check every 15 seconds for faster response
+      this.botClient = null; // Will be set by the main bot
+      this.cryptoSymbols = [
+        'bitcoin', 'ethereum', 'cardano', 'solana', 'dogecoin', 'ripple', 'litecoin',
+        'polkadot', 'chainlink', 'stellar', 'vechain', 'filecoin', 'tron', 'cosmos',
+        'algorand', 'avalanche', 'polygon', 'fantom', 'near', 'harmony', 'elrond',
+        'btc', 'eth', 'ada', 'sol', 'doge', 'xrp', 'ltc', 'dot', 'link', 'xlm',
+        'vet', 'fil', 'trx', 'atom', 'algo', 'avax', 'matic', 'ftm', 'one', 'egld'
+      ];
+      
+      console.log('🚀 AlertService initialized');
+      console.log(`📊 StockService available: ${stockService ? 'Yes' : 'No'}`);
+      
+      if (stockService) {
+        console.log('🔄 Starting continuous monitoring...');
+        this.startContinuousMonitoring();
+      } else {
+        console.log('⚠️ AlertService running without StockService - alerts disabled');
+      }
+      
+    } catch (error) {
+      console.error('❌ AlertService constructor failed:', error.message);
+      throw error;
+    }
   }
 
   /**
@@ -26,6 +46,7 @@ class AlertService {
    */
   setBotClient(client) {
     this.botClient = client;
+    console.log('✅ Bot client connected to AlertService');
   }
 
   /**
@@ -39,18 +60,100 @@ class AlertService {
   }
 
   /**
-   * Add a new price alert
+   * Add a new price alert - simplified interface
+   * @param {string} alertText - Alert command text like "AAPL $187.50"
    * @param {string} chatId - Chat ID where alert was created
-   * @param {string} symbol - Stock/crypto symbol
-   * @param {number} targetPrice - Target price to alert at
-   * @param {string} userId - User who created the alert
-   * @param {string} userName - Display name of user
-   * @param {number} currentPrice - Current price when alert was created
-   * @returns {Object} Alert details
+   * @param {string} userId - User who created the alert (optional)
+   * @param {string} userName - Display name of user (optional)
+   * @returns {Promise<Object>} Alert result
    */
-  addAlert(chatId, symbol, targetPrice, userId, userName, currentPrice) {
+  async addAlert(alertText, chatId, userId = 'unknown', userName = 'User') {
+    try {
+      console.log(`🚨 Processing alert command: "${alertText}"`);
+      
+      if (!stockService) {
+        return {
+          success: false,
+          message: '❌ Alert service not available - Stock service failed to load'
+        };
+      }
+
+      // Parse the alert command
+      const parsed = this.parseAlertCommand(alertText);
+      if (!parsed) {
+        return {
+          success: false,
+          message: '❌ Invalid alert format. Use: !alert SYMBOL $price\n\nExamples:\n🚨 !alert AAPL $187.50\n🚨 !alert bitcoin $45000'
+        };
+      }
+
+      const { symbol, targetPrice } = parsed;
+      console.log(`📊 Parsed alert: ${symbol} @ $${targetPrice}`);
+
+      // Get current price to determine alert direction
+      const assetType = this.isCryptoSymbol(symbol) ? 'crypto' : 'stock';
+      console.log(`📈 Asset type detected: ${assetType}`);
+
+      let currentPrice;
+      try {
+        if (assetType === 'crypto') {
+          const cryptoData = await stockService.getCryptoPrice(symbol.toLowerCase());
+          currentPrice = cryptoData.price;
+        } else {
+          const stockData = await stockService.getStockPrice(symbol);
+          currentPrice = stockData.price;
+        }
+      } catch (priceError) {
+        console.log(`❌ Current price fetch failed: ${priceError.message}`);
+        return {
+          success: false,
+          message: `❌ Could not fetch current price for ${symbol}: ${priceError.message}`
+        };
+      }
+
+      console.log(`💰 Current price: $${currentPrice} | Target: $${targetPrice}`);
+
+      // Create the alert
+      const alert = this.createAlert(chatId, symbol, targetPrice, userId, userName, currentPrice, assetType);
+      
+      // Determine direction message
+      let directionText = '';
+      if (alert.alertDirection === 'up') {
+        directionText = `📈 Alert when price rises to $${targetPrice.toLocaleString()}`;
+      } else if (alert.alertDirection === 'down') {
+        directionText = `📉 Alert when price drops to $${targetPrice.toLocaleString()}`;
+      } else {
+        directionText = `🎯 Target price already reached!`;
+      }
+
+      return {
+        success: true,
+        message: `🚨 *PRICE ALERT CREATED!* ✅\n\n${assetType === 'crypto' ? '🪙' : '📈'} *${symbol}* (${assetType.toUpperCase()})\n💰 *Current Price:* $${currentPrice.toLocaleString()}\n🎯 *Target Price:* $${targetPrice.toLocaleString()}\n\n${directionText}\n\n🔍 *Live monitoring active* (15s intervals)\n📱 You'll be notified when target is reached\n\n🤖 *Powered by Fentrix.Ai*`,
+        alert: alert
+      };
+
+    } catch (error) {
+      console.error('❌ Alert creation failed:', error.message);
+      return {
+        success: false,
+        message: `❌ Failed to create alert: ${error.message}`
+      };
+    }
+  }
+
+  /**
+   * Create alert object and store it
+   * @param {string} chatId - Chat ID
+   * @param {string} symbol - Symbol
+   * @param {number} targetPrice - Target price
+   * @param {string} userId - User ID
+   * @param {string} userName - User name
+   * @param {number} currentPrice - Current price
+   * @param {string} assetType - 'stock' or 'crypto'
+   * @returns {Object} Alert object
+   */
+  createAlert(chatId, symbol, targetPrice, userId, userName, currentPrice, assetType) {
     const alertId = `${symbol}_${targetPrice}_${Date.now()}`;
-    const assetType = this.isCryptoSymbol(symbol) ? 'crypto' : 'stock';
     
     // Determine alert direction based on current vs target price
     let alertDirection = 'up'; // Default to up
@@ -100,6 +203,10 @@ class AlertService {
    * @returns {Promise<Object>} Price data
    */
   async getCurrentPrice(symbol, assetType) {
+    if (!stockService) {
+      throw new Error('Stock service not available');
+    }
+
     try {
       if (assetType === 'crypto' || this.isCryptoSymbol(symbol)) {
         console.log(`🪙 Fetching crypto price for ${symbol}...`);
@@ -119,9 +226,25 @@ class AlertService {
           return await stockService.getCryptoPrice(symbol.toLowerCase());
         }
       } catch (fallbackError) {
-        throw new Error(`Could not fetch price for ${symbol} as either stock or crypto`);
+        throw new Error(`Could not fetch price for ${symbol} as either stock or crypto: ${error.message}`);
       }
     }
+  }
+
+  /**
+   * Get all active alerts across all chats
+   * @returns {Array} Array of all alerts
+   */
+  getActiveAlerts() {
+    const allAlerts = [];
+    for (const chatAlerts of this.activeAlerts.values()) {
+      for (const alert of chatAlerts.values()) {
+        if (alert.isActive) {
+          allAlerts.push(alert);
+        }
+      }
+    }
+    return allAlerts;
   }
 
   /**
@@ -137,47 +260,16 @@ class AlertService {
   }
 
   /**
-   * Get all active alerts across all chats
-   * @returns {Array} Array of all alerts
-   */
-  getAllAlerts() {
-    const allAlerts = [];
-    for (const chatAlerts of this.activeAlerts.values()) {
-      for (const alert of chatAlerts.values()) {
-        if (alert.isActive) {
-          allAlerts.push(alert);
-        }
-      }
-    }
-    return allAlerts;
-  }
-
-  /**
-   * Remove an alert
-   * @param {string} chatId - Chat ID
-   * @param {string} alertId - Alert ID to remove
-   * @returns {boolean} Success status
-   */
-  removeAlert(chatId, alertId) {
-    const chatAlerts = this.activeAlerts.get(chatId);
-    if (!chatAlerts) return false;
-
-    const alert = chatAlerts.get(alertId);
-    if (alert) {
-      alert.isActive = false;
-      chatAlerts.delete(alertId);
-      console.log(`🗑️ Alert removed: ${alert.symbol} (${alert.assetType}) @ $${alert.targetPrice}`);
-      return true;
-    }
-    return false;
-  }
-
-  /**
    * Start continuous monitoring that never stops
    */
   startContinuousMonitoring() {
     if (this.isMonitoring) {
       console.log('🔍 Monitoring already running...');
+      return;
+    }
+
+    if (!stockService) {
+      console.log('⚠️ Cannot start monitoring - StockService not available');
       return;
     }
 
@@ -200,7 +292,12 @@ class AlertService {
     const currentTime = new Date().toLocaleTimeString();
     console.log(`\n🔍 [${currentTime}] LIVE PRICE MONITORING CHECK...`);
     
-    const allAlerts = this.getAllAlerts();
+    if (!stockService) {
+      console.log('⚠️ StockService not available - skipping monitoring');
+      return;
+    }
+    
+    const allAlerts = this.getActiveAlerts();
     
     if (allAlerts.length === 0) {
       console.log('📭 No active alerts - but still monitoring live prices...');
@@ -297,25 +394,6 @@ class AlertService {
   }
 
   /**
-   * Stop monitoring completely
-   */
-  stopMonitoring() {
-    if (this.monitoringInterval) {
-      clearInterval(this.monitoringInterval);
-      this.monitoringInterval = null;
-    }
-    this.isMonitoring = false;
-    console.log('⏹️ Live price monitoring stopped');
-  }
-
-  /**
-   * Legacy checkAlerts method - now redirects to enhanced version
-   */
-  async checkAlerts() {
-    await this.checkAlertsAndLogPrices();
-  }
-
-  /**
    * Determine if an alert should be triggered
    * @param {Object} alert - Alert object
    * @param {number} currentPrice - Current price
@@ -390,7 +468,7 @@ ${priceEmoji} *Change Today:* ${priceChange > 0 ? '+' : ''}${priceChange.toFixed
 👤 *Alert by:* ${alert.userName}
 ⏰ *Time:* ${new Date().toLocaleString()}
 
-${actionEmoji} *Consider buying now!* The ${alert.assetType} has reached your target level.
+${actionEmoji} *Consider your trading strategy!* The ${alert.assetType} has reached your target level.
 
 🤖 *Powered by Fentrix.Ai*`;
 
@@ -449,48 +527,23 @@ ${actionEmoji} *Consider buying now!* The ${alert.assetType} has reached your ta
   }
 
   /**
-   * Format current alerts display
+   * Remove an alert
    * @param {string} chatId - Chat ID
-   * @returns {string} Formatted alerts message
+   * @param {string} alertId - Alert ID to remove
+   * @returns {boolean} Success status
    */
-  formatAlertsDisplay(chatId) {
-    const alerts = this.getChatAlerts(chatId);
-    
-    if (alerts.length === 0) {
-      return '📭 *No active alerts in this chat*\n\n💡 Create alerts with: !alert SYMBOL $price\n\n📈 *Stock Examples:*\n• !alert AAPL $187.50\n• !alert TSLA $200.00\n\n🪙 *Crypto Examples:*\n• !alert bitcoin $45000\n• !alert ethereum $2500';
+  removeAlert(chatId, alertId) {
+    const chatAlerts = this.activeAlerts.get(chatId);
+    if (!chatAlerts) return false;
+
+    const alert = chatAlerts.get(alertId);
+    if (alert) {
+      alert.isActive = false;
+      chatAlerts.delete(alertId);
+      console.log(`🗑️ Alert removed: ${alert.symbol} (${alert.assetType}) @ $${alert.targetPrice}`);
+      return true;
     }
-
-    let message = `📢 *ACTIVE PRICE ALERTS* (${alerts.length})\n\n`;
-
-    // Separate stocks and crypto for better display
-    const stockAlerts = alerts.filter(alert => alert.assetType === 'stock');
-    const cryptoAlerts = alerts.filter(alert => alert.assetType === 'crypto');
-
-    if (stockAlerts.length > 0) {
-      message += `📈 *STOCKS (${stockAlerts.length}):*\n`;
-      stockAlerts.forEach((alert, index) => {
-        const timeAgo = this.getTimeAgo(alert.createdAt);
-        const directionEmoji = alert.alertDirection === 'up' ? '⬆️' : alert.alertDirection === 'down' ? '⬇️' : '🎯';
-        message += `${index + 1}. 📊 *${alert.symbol}* - Target: $${alert.targetPrice.toLocaleString()} ${directionEmoji}\n`;
-        message += `   👤 By: ${alert.userName} | ⏰ ${timeAgo} | Direction: ${alert.alertDirection.toUpperCase()}\n\n`;
-      });
-    }
-
-    if (cryptoAlerts.length > 0) {
-      message += `🪙 *CRYPTO (${cryptoAlerts.length}):*\n`;
-      cryptoAlerts.forEach((alert, index) => {
-        const timeAgo = this.getTimeAgo(alert.createdAt);
-        const directionEmoji = alert.alertDirection === 'up' ? '⬆️' : alert.alertDirection === 'down' ? '⬇️' : '🎯';
-        message += `${index + 1}. 🪙 *${alert.symbol}* - Target: $${alert.targetPrice.toLocaleString()} ${directionEmoji}\n`;
-        message += `   👤 By: ${alert.userName} | ⏰ ${timeAgo} | Direction: ${alert.alertDirection.toUpperCase()}\n\n`;
-      });
-    }
-
-    message += `🔍 LIVE monitoring every ${this.checkIntervalMs / 1000} seconds with real-time price checks\n`;
-    message += `📊 Background monitoring is always active\n`;
-    message += `🤖 *Powered by Fentrix.Ai*`;
-
-    return message;
+    return false;
   }
 
   /**
@@ -500,37 +553,33 @@ ${actionEmoji} *Consider buying now!* The ${alert.assetType} has reached your ta
    */
   getTimeAgo(date) {
     const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
+    const diff = now - date;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'Just now';
   }
 
   /**
-   * Get monitoring status
-   * @returns {Object} Monitoring status
+   * Get service status
+   * @returns {Object} Service status
    */
   getStatus() {
-    const allAlerts = this.getAllAlerts();
-    const stockAlerts = allAlerts.filter(alert => alert.assetType === 'stock');
-    const cryptoAlerts = allAlerts.filter(alert => alert.assetType === 'crypto');
-
     return {
       isMonitoring: this.isMonitoring,
-      totalAlerts: allAlerts.length,
-      stockAlerts: stockAlerts.length,
-      cryptoAlerts: cryptoAlerts.length,
-      checkInterval: this.checkIntervalMs / 1000,
-      chatsWithAlerts: this.activeAlerts.size
+      totalAlerts: this.getActiveAlerts().length,
+      stockServiceAvailable: !!stockService,
+      botClientConnected: !!this.botClient,
+      checkInterval: this.checkIntervalMs
     };
   }
 }
 
-module.exports = new AlertService(); 
+// Export singleton instance
+const alertServiceInstance = new AlertService();
+
+module.exports = alertServiceInstance; 
