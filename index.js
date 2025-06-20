@@ -389,55 +389,120 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Railway health checks should now pass!`);
 });
 
-// Import services with error handling
+// Import services with enhanced Railway debugging
 let stockService, enhancedSentimentService, alertService;
 
+console.log('📦 LOADING SERVICE MODULES WITH ENHANCED DEBUGGING...');
+console.log('🔍 Current working directory:', process.cwd());
+console.log('🔍 __dirname:', __dirname);
+console.log('🔍 Node.js version:', process.version);
+console.log('🔍 Environment:', process.env.NODE_ENV || 'development');
+
+// Check if services directory exists
+const fs = require('fs');
+const path = require('path');
+
 try {
-  console.log('📦 Loading service modules...');
+  const servicesDir = path.join(__dirname, 'services');
+  console.log('🔍 Checking services directory:', servicesDir);
   
-  // Load each service individually with specific error handling
+  if (fs.existsSync(servicesDir)) {
+    console.log('✅ Services directory exists');
+    const files = fs.readdirSync(servicesDir);
+    console.log('📁 Files in services directory:', files);
+  } else {
+    console.error('❌ Services directory does not exist!');
+  }
+} catch (dirError) {
+  console.error('❌ Directory check failed:', dirError.message);
+}
+
+try {
+  console.log('\n📈 LOADING STOCK SERVICE...');
+  
+  // Load each service individually with enhanced error handling
   try {
+    console.log('🔄 Attempting to require ./services/stockService...');
     stockService = require('./services/stockService');
     console.log('✅ Stock service loaded successfully');
+    console.log('📊 Stock service type:', typeof stockService);
+    console.log('📋 Stock service constructor name:', stockService.constructor.name);
   } catch (stockError) {
-    console.error('❌ Stock service loading failed:', stockError.message);
-    console.error('📝 Stock service error details:', stockError.stack);
+    console.error('❌ STOCK SERVICE LOADING FAILED:');
+    console.error('📝 Error message:', stockError.message);
+    console.error('📝 Error code:', stockError.code);
+    console.error('📝 Full stack trace:', stockError.stack);
+    console.error('📝 Error type:', stockError.name);
     stockService = null;
   }
   
+  console.log('\n🧠 LOADING SENTIMENT SERVICE...');
   try {
+    console.log('🔄 Attempting to require ./services/enhancedSentimentService...');
     enhancedSentimentService = require('./services/enhancedSentimentService');
     console.log('✅ Enhanced sentiment service loaded successfully');
+    console.log('📊 Sentiment service type:', typeof enhancedSentimentService);
   } catch (sentimentError) {
-    console.error('❌ Enhanced sentiment service loading failed:', sentimentError.message);
-    console.error('📝 Sentiment service error details:', sentimentError.stack);
+    console.error('❌ SENTIMENT SERVICE LOADING FAILED:');
+    console.error('📝 Error message:', sentimentError.message);
+    console.error('📝 Error code:', sentimentError.code);
+    console.error('📝 Full stack trace:', sentimentError.stack);
+    console.error('📝 Error type:', sentimentError.name);
     enhancedSentimentService = null;
   }
   
+  console.log('\n🚨 LOADING ALERT SERVICE...');
   try {
+    console.log('🔄 Attempting to require ./services/alertService...');
     alertService = require('./services/alertService');
     console.log('✅ Alert service loaded successfully');
+    console.log('📊 Alert service type:', typeof alertService);
   } catch (alertError) {
-    console.error('❌ Alert service loading failed:', alertError.message);
-    console.error('📝 Alert service error details:', alertError.stack);
+    console.error('❌ ALERT SERVICE LOADING FAILED:');
+    console.error('📝 Error message:', alertError.message);
+    console.error('📝 Error code:', alertError.code);
+    console.error('📝 Full stack trace:', alertError.stack);
+    console.error('📝 Error type:', alertError.name);
     alertService = null;
   }
   
-  // Summary of loaded services
+  // Enhanced summary of loaded services
+  console.log('\n📋 SERVICE LOADING SUMMARY:');
   const loadedServices = [];
-  if (stockService) loadedServices.push('Stock Service');
-  if (enhancedSentimentService) loadedServices.push('Sentiment Service');
-  if (alertService) loadedServices.push('Alert Service');
+  if (stockService) {
+    loadedServices.push('Stock Service');
+    console.log('✅ Stock Service: LOADED');
+  } else {
+    console.log('❌ Stock Service: FAILED');
+  }
+  
+  if (enhancedSentimentService) {
+    loadedServices.push('Sentiment Service');
+    console.log('✅ Sentiment Service: LOADED');
+  } else {
+    console.log('❌ Sentiment Service: FAILED');
+  }
+  
+  if (alertService) {
+    loadedServices.push('Alert Service');
+    console.log('✅ Alert Service: LOADED');
+  } else {
+    console.log('❌ Alert Service: FAILED');
+  }
   
   if (loadedServices.length > 0) {
     console.log(`🎉 Successfully loaded ${loadedServices.length}/3 services: ${loadedServices.join(', ')}`);
   } else {
     console.log('❌ NO SERVICES LOADED - Bot will run in basic mode');
+    console.log('🔧 This indicates a serious Railway deployment issue');
   }
   
 } catch (error) {
-  console.error('❌ CRITICAL SERVICE LOADING ERROR:', error.message);
-  console.error('📝 Stack:', error.stack);
+  console.error('❌ CRITICAL SERVICE LOADING ERROR:');
+  console.error('📝 Error message:', error.message);
+  console.error('📝 Error code:', error.code);
+  console.error('📝 Full stack trace:', error.stack);
+  console.error('📝 Error type:', error.name);
   console.log('🔧 Bot will continue without services - basic functionality only');
   
   // Set all services to null
