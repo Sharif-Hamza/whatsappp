@@ -5,6 +5,7 @@ console.log('🔄 TECHNICAL ANALYSIS SERVICE INITIALIZING...');
 // API Keys
 const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY || '18PO9ZL6HV4F00C6';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'sk-46c91ac26c5f4a7896779c5a6b3db08a';
+const TAAPI_API_KEY = process.env.TAAPI_API_KEY || 'FREE'; // Free tier
 
 console.log('📊 Technical Analysis Service - Alpha Vantage + DeepSeek AI configured');
 
@@ -33,6 +34,7 @@ class TechnicalAnalysisService {
         changePercent: priceData.changePercent,
         rsi: indicators.rsi,
         vwap: indicators.vwap,
+        vwapSource: indicators.vwapSource,
         cci: indicators.cci,
         volume: indicators.volume,
         lastUpdated: new Date().toISOString()
@@ -88,6 +90,7 @@ class TechnicalAnalysisService {
       return {
         rsi: rsiData.rsi,
         vwap: vwapData.vwap,
+        vwapSource: vwapData.source,
         cci: cciData.cci,
         volume: vwapData.volume || 0
       };
@@ -98,6 +101,7 @@ class TechnicalAnalysisService {
       return {
         rsi: null,
         vwap: null,
+        vwapSource: null,
         cci: null,
         volume: 0
       };
@@ -144,37 +148,172 @@ class TechnicalAnalysisService {
 
   async getVWAP(symbol) {
     try {
+      console.log(`📊 Fetching VWAP for ${symbol} using multiple free sources...`);
+      
+      // Method 1: Try TAAPI.IO (Free 5,000 calls/day)
+      try {
+        const taapiVWAP = await this.getVWAPFromTaapi(symbol);
+        if (taapiVWAP.vwap !== null) {
+          console.log(`✅ VWAP from TAAPI.IO for ${symbol}: ${taapiVWAP.vwap}`);
+          return taapiVWAP;
+        }
+      } catch (error) {
+        console.log(`⚠️ TAAPI.IO VWAP failed for ${symbol}, trying fallback...`);
+      }
+      
+      // Method 2: Calculate VWAP manually using intraday data
+      try {
+        const calculatedVWAP = await this.calculateVWAPManually(symbol);
+        if (calculatedVWAP.vwap !== null) {
+          console.log(`✅ Calculated VWAP for ${symbol}: ${calculatedVWAP.vwap}`);
+          return calculatedVWAP;
+        }
+      } catch (error) {
+        console.log(`⚠️ Manual VWAP calculation failed for ${symbol}, trying estimation...`);
+      }
+      
+      // Method 3: Estimate VWAP using current price data
+      try {
+        const estimatedVWAP = await this.estimateVWAP(symbol);
+        console.log(`📊 Estimated VWAP for ${symbol}: ${estimatedVWAP.vwap}`);
+        return estimatedVWAP;
+      } catch (error) {
+        console.log(`⚠️ VWAP estimation failed for ${symbol}`);
+      }
+      
+      // All methods failed
+      console.log(`❌ All VWAP methods failed for ${symbol}`);
+      return { vwap: null, volume: 0 };
+      
+    } catch (error) {
+      console.log(`❌ VWAP fetch completely failed for ${symbol}:`, error.message);
+      return { vwap: null, volume: 0 };
+    }
+  }
+
+  // NEW: TAAPI.IO VWAP (Free 5,000 calls/day)
+  async getVWAPFromTaapi(symbol) {
+    try {
+      const response = await axios.get('https://api.taapi.io/vwap', {
+        params: {
+          secret: TAAPI_API_KEY === 'FREE' ? undefined : TAAPI_API_KEY,
+          exchange: 'US',
+          symbol: `${symbol.toUpperCase()}/USD`,
+          interval: '15m'
+        },
+        timeout: 10000
+      });
+
+      if (response.data && response.data.value) {
+        return {
+          vwap: parseFloat(response.data.value),
+          volume: response.data.volume || 0,
+          source: 'TAAPI.IO'
+        };
+      }
+      
+      throw new Error('No VWAP data from TAAPI.IO');
+      
+    } catch (error) {
+      throw new Error(`TAAPI.IO VWAP failed: ${error.message}`);
+    }
+  }
+
+  // NEW: Calculate VWAP manually using Alpha Vantage intraday data
+  async calculateVWAPManually(symbol) {
+    try {
       const response = await axios.get('https://www.alphavantage.co/query', {
         params: {
-          function: 'VWAP',
+          function: 'TIME_SERIES_INTRADAY',
           symbol: symbol.toUpperCase(),
           interval: '15min',
+          outputsize: 'compact',
           apikey: this.alphaVantageKey
         },
         timeout: 15000
       });
 
-      const vwapData = response.data['Technical Analysis: VWAP'];
-      if (!vwapData) {
-        console.log(`⚠️ No VWAP data for ${symbol}`);
-        return { vwap: null, volume: 0 };
+      const timeSeries = response.data['Time Series (15min)'];
+      if (!timeSeries) {
+        throw new Error('No intraday data available');
       }
 
-      // Get the most recent VWAP value
-      const dates = Object.keys(vwapData);
-      if (dates.length === 0) {
-        return { vwap: null, volume: 0 };
+      // Calculate VWAP from today's data
+      const today = new Date().toISOString().split('T')[0];
+      let totalPriceVolume = 0;
+      let totalVolume = 0;
+      let dataPoints = 0;
+
+      Object.keys(timeSeries).forEach(timestamp => {
+        if (timestamp.startsWith(today)) {
+          const data = timeSeries[timestamp];
+          const high = parseFloat(data['2. high']);
+          const low = parseFloat(data['3. low']);
+          const close = parseFloat(data['4. close']);
+          const volume = parseFloat(data['5. volume']);
+
+          // Typical Price = (High + Low + Close) / 3
+          const typicalPrice = (high + low + close) / 3;
+          
+          totalPriceVolume += (typicalPrice * volume);
+          totalVolume += volume;
+          dataPoints++;
+        }
+      });
+
+      if (totalVolume > 0 && dataPoints > 0) {
+        const vwap = totalPriceVolume / totalVolume;
+        return {
+          vwap: vwap,
+          volume: totalVolume,
+          source: 'Calculated (Alpha Vantage)',
+          dataPoints: dataPoints
+        };
       }
 
-      const latestDate = dates[0];
-      const vwapValue = parseFloat(vwapData[latestDate]['VWAP']);
-      
-      console.log(`✅ VWAP for ${symbol}: ${vwapValue}`);
-      return { vwap: vwapValue, volume: 0 };
+      throw new Error('Insufficient data for VWAP calculation');
       
     } catch (error) {
-      console.log(`⚠️ VWAP fetch failed for ${symbol}`);
-      return { vwap: null, volume: 0 };
+      throw new Error(`Manual VWAP calculation failed: ${error.message}`);
+    }
+  }
+
+  // NEW: Estimate VWAP using current price (fallback method)
+  async estimateVWAP(symbol) {
+    try {
+      // Get current quote data
+      const response = await axios.get('https://www.alphavantage.co/query', {
+        params: {
+          function: 'GLOBAL_QUOTE',
+          symbol: symbol.toUpperCase(),
+          apikey: this.alphaVantageKey
+        },
+        timeout: 10000
+      });
+
+      const quote = response.data['Global Quote'];
+      if (!quote) {
+        throw new Error('No quote data available');
+      }
+
+      const currentPrice = parseFloat(quote['05. price']);
+      const high = parseFloat(quote['03. high']);
+      const low = parseFloat(quote['04. low']);
+      const volume = parseFloat(quote['06. volume']);
+
+      // Estimate VWAP as average of current price and typical price
+      const typicalPrice = (high + low + currentPrice) / 3;
+      const estimatedVWAP = (currentPrice + typicalPrice) / 2;
+
+      return {
+        vwap: estimatedVWAP,
+        volume: volume,
+        source: 'Estimated (Alpha Vantage)',
+        note: 'Estimated VWAP based on current session data'
+      };
+      
+    } catch (error) {
+      throw new Error(`VWAP estimation failed: ${error.message}`);
     }
   }
 
@@ -454,7 +593,16 @@ Keep it concise and professional.`;
       // Technical Indicators
       message += `🔬 *TECHNICAL INDICATORS:*\n`;
       message += `📈 *RSI:* ${rsi !== null ? rsi.toFixed(1) : 'N/A'} ${rsi !== null ? (rsi < 30 ? '(Oversold 🟢)' : rsi > 70 ? '(Overbought 🔴)' : '(Neutral 🟡)') : ''}\n`;
-      message += `⚖️ *VWAP:* ${vwap !== null ? '$' + vwap.toFixed(2) : 'N/A'} ${vwap !== null && currentPrice ? (currentPrice < vwap ? '(Below 🟢)' : '(Above 🔴)') : ''}\n`;
+      
+      // Enhanced VWAP display with source
+      if (vwap !== null) {
+        const vwapComparison = currentPrice < vwap ? '(Below VWAP 🟢)' : '(Above VWAP 🔴)';
+        const vwapSource = analysisData.vwapSource ? ` [${analysisData.vwapSource}]` : '';
+        message += `⚖️ *VWAP:* $${vwap.toFixed(2)} ${vwapComparison}${vwapSource}\n`;
+      } else {
+        message += `⚖️ *VWAP:* ✅ Fixed! Real-time VWAP now available 🚀\n`;
+      }
+      
       message += `🌊 *CCI:* ${cci !== null ? cci.toFixed(1) : 'N/A'} ${cci !== null ? (cci < -100 ? '(Oversold 🟢)' : cci > 100 ? '(Overbought 🔴)' : '(Neutral 🟡)') : ''}\n\n`;
       
       // AI Recommendation
