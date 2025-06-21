@@ -6,6 +6,7 @@ console.log('🔄 TECHNICAL ANALYSIS SERVICE INITIALIZING...');
 const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY || '18PO9ZL6HV4F00C6';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'sk-46c91ac26c5f4a7896779c5a6b3db08a';
 const TAAPI_API_KEY = process.env.TAAPI_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbHVlIjoiNjg1NjM1ZWE4MDZmZjE2NTFlYTk3MWVlIiwiaWF0IjoxNzUwNDgwMzc4LCJleHAiOjMzMjU0OTQ0Mzc4fQ.OawARvdzrNC1fcEcueMk0M2Ijii_mNDUNovPl04YkI0';
+const FMP_API_KEY = process.env.FMP_API_KEY || '9oIeBPQadRTMDrJbksHojMJvLpvxINnd';
 
 console.log('📊 Technical Analysis Service - Alpha Vantage + DeepSeek AI configured');
 
@@ -148,31 +149,61 @@ class TechnicalAnalysisService {
 
   async getVWAP(symbol) {
     try {
-      console.log(`📊 Fetching VWAP for ${symbol} using multiple free sources...`);
+      console.log(`📊 Fetching VWAP for ${symbol} using multiple sources...`);
       
-      // Method 1: Try TAAPI.IO (Free 5,000 calls/day)
-      try {
-        const taapiVWAP = await this.getVWAPFromTaapi(symbol);
-        if (taapiVWAP.vwap !== null) {
-          console.log(`✅ VWAP from TAAPI.IO for ${symbol}: ${taapiVWAP.vwap}`);
-          return taapiVWAP;
+      // Check if crypto or stock
+      const cryptoSymbols = ['BTC', 'ETH', 'XRP', 'LTC', 'XMR', 'BITCOIN', 'ETHEREUM', 'RIPPLE', 'LITECOIN', 'MONERO'];
+      const isCrypto = cryptoSymbols.some(crypto => symbol.toUpperCase().includes(crypto));
+      
+      if (isCrypto) {
+        // Method 1: TAAPI.IO for crypto only (free plan supports crypto)
+        try {
+          console.log(`🪙 ${symbol} detected as crypto - using TAAPI.IO...`);
+          const taapiVWAP = await this.getVWAPFromTaapiCrypto(symbol);
+          if (taapiVWAP.vwap !== null) {
+            console.log(`✅ VWAP from TAAPI.IO for ${symbol}: ${taapiVWAP.vwap}`);
+            return taapiVWAP;
+          }
+        } catch (error) {
+          console.log(`⚠️ TAAPI.IO crypto VWAP failed for ${symbol}, trying estimation...`);
         }
-      } catch (error) {
-        console.log(`⚠️ TAAPI.IO VWAP failed for ${symbol}, trying fallback...`);
+      } else {
+        // Method 1: FMP for stocks (includes real VWAP data!)
+        try {
+          console.log(`📈 ${symbol} detected as stock - using FMP real VWAP data...`);
+          const fmpVWAP = await this.getVWAPFromFMP(symbol);
+          if (fmpVWAP.vwap !== null) {
+            console.log(`✅ VWAP from FMP for ${symbol}: ${fmpVWAP.vwap}`);
+            return fmpVWAP;
+          }
+        } catch (error) {
+          console.log(`⚠️ FMP VWAP failed for ${symbol}, trying enhanced calculation...`);
+        }
+        
+        // Method 2: Enhanced VWAP calculation for stocks as fallback
+        try {
+          const calculatedVWAP = await this.calculateVWAPManuallyEnhanced(symbol);
+          if (calculatedVWAP.vwap !== null) {
+            console.log(`✅ Enhanced calculated VWAP for ${symbol}: ${calculatedVWAP.vwap}`);
+            return calculatedVWAP;
+          }
+        } catch (error) {
+          console.log(`⚠️ Enhanced VWAP calculation failed for ${symbol}, trying basic calculation...`);
+        }
       }
       
-      // Method 2: Calculate VWAP manually using intraday data
+      // Method 3: Basic manual calculation (fallback)
       try {
         const calculatedVWAP = await this.calculateVWAPManually(symbol);
         if (calculatedVWAP.vwap !== null) {
-          console.log(`✅ Calculated VWAP for ${symbol}: ${calculatedVWAP.vwap}`);
+          console.log(`✅ Basic calculated VWAP for ${symbol}: ${calculatedVWAP.vwap}`);
           return calculatedVWAP;
         }
       } catch (error) {
-        console.log(`⚠️ Manual VWAP calculation failed for ${symbol}, trying estimation...`);
+        console.log(`⚠️ Basic VWAP calculation failed for ${symbol}, trying estimation...`);
       }
       
-      // Method 3: Estimate VWAP using current price data
+      // Method 4: Estimate VWAP using current price data (last resort)
       try {
         const estimatedVWAP = await this.estimateVWAP(symbol);
         console.log(`📊 Estimated VWAP for ${symbol}: ${estimatedVWAP.vwap}`);
@@ -183,44 +214,160 @@ class TechnicalAnalysisService {
       
       // All methods failed
       console.log(`❌ All VWAP methods failed for ${symbol}`);
-      return { vwap: null, volume: 0 };
+      return { vwap: null, volume: 0, source: 'VWAP unavailable' };
       
     } catch (error) {
       console.log(`❌ VWAP fetch completely failed for ${symbol}:`, error.message);
-      return { vwap: null, volume: 0 };
+      return { vwap: null, volume: 0, source: 'VWAP error' };
     }
   }
 
-  // FIXED: TAAPI.IO VWAP with correct US stock format
-  async getVWAPFromTaapi(symbol) {
+  // NEW: TAAPI.IO for crypto only (free plan supports crypto)
+  async getVWAPFromTaapiCrypto(symbol) {
     try {
-      console.log(`🔄 TAAPI.IO: Fetching VWAP for ${symbol} with real API key...`);
+      // Convert crypto symbols to TAAPI.IO format
+      let taapiSymbol = symbol.toUpperCase();
+      if (taapiSymbol === 'BITCOIN' || taapiSymbol === 'BTC') taapiSymbol = 'BTC/USDT';
+      else if (taapiSymbol === 'ETHEREUM' || taapiSymbol === 'ETH') taapiSymbol = 'ETH/USDT';
+      else if (taapiSymbol === 'RIPPLE' || taapiSymbol === 'XRP') taapiSymbol = 'XRP/USDT';
+      else if (taapiSymbol === 'LITECOIN' || taapiSymbol === 'LTC') taapiSymbol = 'LTC/USDT';
+      else if (taapiSymbol === 'MONERO' || taapiSymbol === 'XMR') taapiSymbol = 'XMR/USDT';
+      else taapiSymbol = `${taapiSymbol}/USDT`;
+      
+      console.log(`🔄 TAAPI.IO: Fetching crypto VWAP for ${taapiSymbol}...`);
       
       const response = await axios.get('https://api.taapi.io/vwap', {
         params: {
           secret: TAAPI_API_KEY,
-          symbol: symbol.toUpperCase(), 
-          type: 'stocks', // MANDATORY for US stocks!
+          exchange: 'binance',
+          symbol: taapiSymbol,
           interval: '1h'
         },
         timeout: 15000
       });
 
-      console.log(`📊 TAAPI.IO Response for ${symbol}:`, response.data);
+      console.log(`📊 TAAPI.IO Crypto Response for ${taapiSymbol}:`, response.data);
 
       if (response.data && response.data.value) {
         return {
           vwap: parseFloat(response.data.value),
           volume: response.data.volume || 0,
-          source: 'TAAPI.IO (Real-time)'
+          source: 'TAAPI.IO (Crypto Real-time)'
         };
       }
       
-      throw new Error('No VWAP value in TAAPI.IO response');
+      throw new Error('No VWAP value in TAAPI.IO crypto response');
       
     } catch (error) {
-      console.error(`❌ TAAPI.IO VWAP error for ${symbol}:`, error.response?.data || error.message);
-      throw new Error(`TAAPI.IO VWAP failed: ${error.message}`);
+      console.error(`❌ TAAPI.IO crypto VWAP error:`, error.response?.data || error.message);
+      throw new Error(`TAAPI.IO crypto VWAP failed: ${error.message}`);
+    }
+  }
+
+  // NEW: FMP VWAP for stocks (includes real VWAP data!)
+  async getVWAPFromFMP(symbol) {
+    try {
+      console.log(`🔄 FMP: Fetching real VWAP data for ${symbol}...`);
+      
+      const response = await axios.get('https://financialmodelingprep.com/stable/historical-price-eod/full', {
+        params: {
+          symbol: symbol.toUpperCase(),
+          apikey: FMP_API_KEY
+        },
+        timeout: 15000
+      });
+
+      console.log(`📊 FMP Response for ${symbol}:`, response.data.length, 'records received');
+
+      if (response.data && response.data.length > 0) {
+        // Get the latest (most recent) record which has VWAP data
+        const latestData = response.data[0]; // FMP returns data in reverse chronological order
+        
+        if (latestData.vwap && latestData.vwap > 0) {
+          console.log(`✅ FMP real VWAP found for ${symbol}: $${latestData.vwap} (Date: ${latestData.date})`);
+          return {
+            vwap: parseFloat(latestData.vwap),
+            volume: parseInt(latestData.volume) || 0,
+            source: 'FMP (Real VWAP Data)',
+            date: latestData.date
+          };
+        } else {
+          throw new Error('No VWAP value in FMP response');
+        }
+      } else {
+        throw new Error('No data received from FMP');
+      }
+      
+    } catch (error) {
+      console.error(`❌ FMP VWAP error for ${symbol}:`, error.response?.data || error.message);
+      throw new Error(`FMP VWAP failed: ${error.message}`);
+    }
+  }
+
+  // ENHANCED: Better VWAP calculation for stocks with more data points
+  async calculateVWAPManuallyEnhanced(symbol) {
+    try {
+      console.log(`🔄 Enhanced VWAP calculation for ${symbol}...`);
+      
+      const response = await axios.get('https://www.alphavantage.co/query', {
+        params: {
+          function: 'TIME_SERIES_INTRADAY',
+          symbol: symbol.toUpperCase(),
+          interval: '5min', // Use 5min for more data points
+          outputsize: 'full', // Get more data
+          apikey: this.alphaVantageKey
+        },
+        timeout: 20000
+      });
+
+      const timeSeries = response.data['Time Series (5min)'];
+      if (!timeSeries) {
+        throw new Error('No intraday data available');
+      }
+
+      // Calculate VWAP from last 24 hours of trading data
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      
+      let totalPriceVolume = 0;
+      let totalVolume = 0;
+      let dataPoints = 0;
+
+      Object.keys(timeSeries).forEach(timestamp => {
+        const dataTime = new Date(timestamp);
+        if (dataTime >= yesterday) {
+          const data = timeSeries[timestamp];
+          const high = parseFloat(data['2. high']);
+          const low = parseFloat(data['3. low']);
+          const close = parseFloat(data['4. close']);
+          const volume = parseFloat(data['5. volume']);
+
+          if (volume > 0) { // Only include periods with actual volume
+            // Typical Price = (High + Low + Close) / 3
+            const typicalPrice = (high + low + close) / 3;
+            
+            totalPriceVolume += (typicalPrice * volume);
+            totalVolume += volume;
+            dataPoints++;
+          }
+        }
+      });
+
+      if (totalVolume > 0 && dataPoints >= 10) { // Need at least 10 data points
+        const vwap = totalPriceVolume / totalVolume;
+        console.log(`✅ Enhanced VWAP calculated with ${dataPoints} data points, total volume: ${totalVolume.toLocaleString()}`);
+        return {
+          vwap: vwap,
+          volume: totalVolume,
+          source: 'Enhanced Calculation (24h Alpha Vantage)',
+          dataPoints: dataPoints
+        };
+      }
+
+      throw new Error(`Insufficient data for enhanced VWAP calculation (${dataPoints} points, ${totalVolume} volume)`);
+      
+    } catch (error) {
+      throw new Error(`Enhanced VWAP calculation failed: ${error.message}`);
     }
   }
 
