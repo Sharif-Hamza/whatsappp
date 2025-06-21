@@ -8,13 +8,13 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'sk-46c91ac26c5f4a78967
 const TAAPI_API_KEY = process.env.TAAPI_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbHVlIjoiNjg1NjM1ZWE4MDZmZjE2NTFlYTk3MWVlIiwiaWF0IjoxNzUwNDgwMzc4LCJleHAiOjMzMjU0OTQ0Mzc4fQ.OawARvdzrNC1fcEcueMk0M2Ijii_mNDUNovPl04YkI0';
 const FMP_API_KEY = process.env.FMP_API_KEY || '9oIeBPQadRTMDrJbksHojMJvLpvxINnd';
 
-console.log('📊 Technical Analysis Service - Alpha Vantage + DeepSeek AI configured');
+console.log('📊 Technical Analysis Service - FMP (RSI/VWAP/CCI) + Alpha Vantage (Price) + DeepSeek AI configured');
 
 class TechnicalAnalysisService {
   constructor() {
     this.alphaVantageKey = ALPHA_VANTAGE_API_KEY;
     this.deepseekKey = DEEPSEEK_API_KEY;
-    console.log('✅ TechnicalAnalysisService initialized with AI trading analysis');
+    console.log('✅ TechnicalAnalysisService initialized - FMP for indicators, Alpha Vantage for price, DeepSeek for AI analysis');
   }
 
   async getStockAnalysis(symbol) {
@@ -23,6 +23,10 @@ class TechnicalAnalysisService {
       
       // Get current price first
       const priceData = await this.getCurrentPrice(symbol);
+      
+      // Add delay to avoid rate limiting
+      console.log(`⏳ Adding 1 second delay to avoid API rate limits...`);
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Get technical indicators
       const indicators = await this.getTechnicalIndicators(symbol);
@@ -46,12 +50,19 @@ class TechnicalAnalysisService {
       
     } catch (error) {
       console.error(`❌ TECHNICAL ANALYSIS: Failed for ${symbol}:`, error.message);
+      
+      // Check if it's a rate limiting error
+      if (error.message.includes('Rate Limit') || error.message.includes('Note')) {
+        throw new Error(`⚠️ API Rate Limit Reached! Please wait a few minutes and try again. Alpha Vantage has strict limits on free accounts.`);
+      }
+      
       throw new Error(`Technical analysis failed for ${symbol}: ${error.message}`);
     }
   }
 
   async getCurrentPrice(symbol) {
     try {
+      console.log(`🔄 Fetching current price for ${symbol}...`);
       const response = await axios.get('https://www.alphavantage.co/query', {
         params: {
           function: 'GLOBAL_QUOTE',
@@ -61,11 +72,21 @@ class TechnicalAnalysisService {
         timeout: 15000
       });
 
-      const data = response.data['Global Quote'];
-      if (!data || Object.keys(data).length === 0) {
-        throw new Error('No price data available');
+      console.log(`📊 Alpha Vantage response status: ${response.status}`);
+      
+      // Check for rate limiting
+      if (response.data && response.data['Note']) {
+        console.log(`⚠️ RATE LIMIT WARNING: ${response.data['Note']}`);
+        throw new Error(`API Rate Limit: ${response.data['Note']}`);
       }
 
+      const data = response.data['Global Quote'];
+      if (!data || Object.keys(data).length === 0) {
+        console.log(`❌ No price data in response for ${symbol}:`, JSON.stringify(response.data, null, 2));
+        throw new Error('No price data available - possible rate limit or invalid symbol');
+      }
+
+      console.log(`✅ Current price fetched for ${symbol}: $${data['05. price']}`);
       return {
         price: parseFloat(data['05. price']),
         change: parseFloat(data['09. change']),
@@ -73,6 +94,10 @@ class TechnicalAnalysisService {
       };
     } catch (error) {
       console.error(`❌ Price fetch failed for ${symbol}:`, error.message);
+      if (error.response) {
+        console.error(`❌ Response status: ${error.response.status}`);
+        console.error(`❌ Response data:`, error.response.data);
+      }
       throw error;
     }
   }
@@ -111,45 +136,61 @@ class TechnicalAnalysisService {
 
   async getRSI(symbol) {
     try {
-      const response = await axios.get('https://www.alphavantage.co/query', {
+      console.log(`📊 Fetching RSI from FMP for ${symbol}...`);
+      const response = await axios.get(`https://financialmodelingprep.com/api/v3/technical_indicator/daily/${symbol.toUpperCase()}`, {
         params: {
-          function: 'RSI',
-          symbol: symbol.toUpperCase(),
-          interval: 'daily',
-          time_period: 14,
-          series_type: 'close',
-          apikey: this.alphaVantageKey
+          period: 14,
+          type: 'rsi',
+          apikey: FMP_API_KEY
         },
         timeout: 15000
       });
 
-      const rsiData = response.data['Technical Analysis: RSI'];
-      if (!rsiData) {
-        console.log(`⚠️ No RSI data for ${symbol}, using fallback calculation`);
-        return { rsi: null };
+      console.log(`📊 FMP RSI response for ${symbol}:`, response.data?.length || 0, 'records');
+
+      if (response.data && response.data.length > 0) {
+        // Get the most recent RSI value
+        const latestRSI = response.data[0];
+        if (latestRSI && latestRSI.rsi !== undefined) {
+          const rsiValue = parseFloat(latestRSI.rsi);
+          console.log(`✅ RSI from FMP for ${symbol}: ${rsiValue}`);
+          return { rsi: rsiValue };
+        }
       }
 
-      // Get the most recent RSI value
-      const dates = Object.keys(rsiData);
-      if (dates.length === 0) {
-        return { rsi: null };
-      }
-
-      const latestDate = dates[0];
-      const rsiValue = parseFloat(rsiData[latestDate]['RSI']);
+      console.log(`⚠️ No RSI data from FMP for ${symbol}, trying alternative endpoint...`);
       
-      console.log(`✅ RSI for ${symbol}: ${rsiValue}`);
-      return { rsi: rsiValue };
+      // Alternative FMP endpoint for technical indicators
+      const altResponse = await axios.get(`https://financialmodelingprep.com/api/v3/technical_indicator/1day/${symbol.toUpperCase()}`, {
+        params: {
+          period: 14,
+          type: 'rsi',
+          apikey: FMP_API_KEY
+        },
+        timeout: 15000
+      });
+
+      if (altResponse.data && altResponse.data.length > 0) {
+        const latestRSI = altResponse.data[0];
+        if (latestRSI && latestRSI.rsi !== undefined) {
+          const rsiValue = parseFloat(latestRSI.rsi);
+          console.log(`✅ RSI from FMP (alternative) for ${symbol}: ${rsiValue}`);
+          return { rsi: rsiValue };
+        }
+      }
+
+      console.log(`⚠️ No RSI data available from FMP for ${symbol}`);
+      return { rsi: null };
       
     } catch (error) {
-      console.log(`⚠️ RSI fetch failed for ${symbol}, using estimation`);
+      console.log(`⚠️ FMP RSI fetch failed for ${symbol}:`, error.message);
       return { rsi: null };
     }
   }
 
   async getVWAP(symbol) {
     try {
-      console.log(`📊 Fetching VWAP for ${symbol} using multiple sources...`);
+      console.log(`📊 Fetching VWAP for ${symbol} - prioritizing FMP...`);
       
       // Check if crypto or stock
       const cryptoSymbols = ['BTC', 'ETH', 'XRP', 'LTC', 'XMR', 'BITCOIN', 'ETHEREUM', 'RIPPLE', 'LITECOIN', 'MONERO'];
@@ -168,43 +209,34 @@ class TechnicalAnalysisService {
           console.log(`⚠️ TAAPI.IO crypto VWAP failed for ${symbol}, trying estimation...`);
         }
       } else {
-        // Method 1: FMP for stocks (includes real VWAP data!)
+        // Method 1: FMP for stocks (PRIMARY METHOD - includes real VWAP data!)
         try {
-          console.log(`📈 ${symbol} detected as stock - using FMP real VWAP data...`);
+          console.log(`📈 ${symbol} detected as stock - using FMP as PRIMARY source...`);
           const fmpVWAP = await this.getVWAPFromFMP(symbol);
           if (fmpVWAP.vwap !== null) {
-            console.log(`✅ VWAP from FMP for ${symbol}: ${fmpVWAP.vwap}`);
+            console.log(`✅ VWAP from FMP (PRIMARY) for ${symbol}: ${fmpVWAP.vwap}`);
             return fmpVWAP;
           }
         } catch (error) {
-          console.log(`⚠️ FMP VWAP failed for ${symbol}, trying enhanced calculation...`);
+          console.log(`⚠️ FMP VWAP failed for ${symbol}:`, error.message);
         }
         
-        // Method 2: Enhanced VWAP calculation for stocks as fallback
+        // Method 2: FMP technical indicators endpoint as backup
         try {
-          const calculatedVWAP = await this.calculateVWAPManuallyEnhanced(symbol);
-          if (calculatedVWAP.vwap !== null) {
-            console.log(`✅ Enhanced calculated VWAP for ${symbol}: ${calculatedVWAP.vwap}`);
-            return calculatedVWAP;
+          console.log(`📊 Trying FMP technical indicators endpoint for ${symbol}...`);
+          const fmpTechVWAP = await this.getVWAPFromFMPTechnical(symbol);
+          if (fmpTechVWAP.vwap !== null) {
+            console.log(`✅ VWAP from FMP Technical for ${symbol}: ${fmpTechVWAP.vwap}`);
+            return fmpTechVWAP;
           }
         } catch (error) {
-          console.log(`⚠️ Enhanced VWAP calculation failed for ${symbol}, trying basic calculation...`);
+          console.log(`⚠️ FMP Technical VWAP failed for ${symbol}:`, error.message);
         }
       }
       
-      // Method 3: Basic manual calculation (fallback)
+      // Last resort: Estimate VWAP using Alpha Vantage current price data  
       try {
-        const calculatedVWAP = await this.calculateVWAPManually(symbol);
-        if (calculatedVWAP.vwap !== null) {
-          console.log(`✅ Basic calculated VWAP for ${symbol}: ${calculatedVWAP.vwap}`);
-          return calculatedVWAP;
-        }
-      } catch (error) {
-        console.log(`⚠️ Basic VWAP calculation failed for ${symbol}, trying estimation...`);
-      }
-      
-      // Method 4: Estimate VWAP using current price data (last resort)
-      try {
+        console.log(`📊 Using Alpha Vantage estimation for ${symbol} VWAP...`);
         const estimatedVWAP = await this.estimateVWAP(symbol);
         console.log(`📊 Estimated VWAP for ${symbol}: ${estimatedVWAP.vwap}`);
         return estimatedVWAP;
@@ -261,6 +293,68 @@ class TechnicalAnalysisService {
     } catch (error) {
       console.error(`❌ TAAPI.IO crypto VWAP error:`, error.response?.data || error.message);
       throw new Error(`TAAPI.IO crypto VWAP failed: ${error.message}`);
+    }
+  }
+
+  // NEW: FMP Technical Indicators VWAP
+  async getVWAPFromFMPTechnical(symbol) {
+    try {
+      console.log(`🔄 FMP Technical: Fetching VWAP for ${symbol}...`);
+      
+      const response = await axios.get(`https://financialmodelingprep.com/api/v3/technical_indicator/daily/${symbol.toUpperCase()}`, {
+        params: {
+          period: 20,
+          type: 'vwap',
+          apikey: FMP_API_KEY
+        },
+        timeout: 15000
+      });
+
+      console.log(`📊 FMP Technical VWAP response for ${symbol}:`, response.data?.length || 0, 'records');
+
+      if (response.data && response.data.length > 0) {
+        const latestVWAP = response.data[0];
+        if (latestVWAP && latestVWAP.vwap !== undefined) {
+          const vwapValue = parseFloat(latestVWAP.vwap);
+          console.log(`✅ VWAP from FMP Technical for ${symbol}: ${vwapValue}`);
+          return {
+            vwap: vwapValue,
+            volume: parseInt(latestVWAP.volume) || 0,
+            source: 'FMP Technical Indicators',
+            date: latestVWAP.date
+          };
+        }
+      }
+
+      // Try alternative endpoint format
+      const altResponse = await axios.get(`https://financialmodelingprep.com/api/v3/technical_indicator/1day/${symbol.toUpperCase()}`, {
+        params: {
+          period: 20,
+          type: 'vwap',
+          apikey: FMP_API_KEY
+        },
+        timeout: 15000
+      });
+
+      if (altResponse.data && altResponse.data.length > 0) {
+        const latestVWAP = altResponse.data[0];
+        if (latestVWAP && latestVWAP.vwap !== undefined) {
+          const vwapValue = parseFloat(latestVWAP.vwap);
+          console.log(`✅ VWAP from FMP Technical (alt) for ${symbol}: ${vwapValue}`);
+          return {
+            vwap: vwapValue,
+            volume: parseInt(latestVWAP.volume) || 0,
+            source: 'FMP Technical Indicators (Alt)',
+            date: latestVWAP.date
+          };
+        }
+      }
+
+      throw new Error('No VWAP data in FMP Technical response');
+      
+    } catch (error) {
+      console.error(`❌ FMP Technical VWAP error for ${symbol}:`, error.response?.data || error.message);
+      throw new Error(`FMP Technical VWAP failed: ${error.message}`);
     }
   }
 
@@ -471,37 +565,54 @@ class TechnicalAnalysisService {
 
   async getCCI(symbol) {
     try {
-      const response = await axios.get('https://www.alphavantage.co/query', {
+      console.log(`📊 Fetching CCI from FMP for ${symbol}...`);
+      const response = await axios.get(`https://financialmodelingprep.com/api/v3/technical_indicator/daily/${symbol.toUpperCase()}`, {
         params: {
-          function: 'CCI',
-          symbol: symbol.toUpperCase(),
-          interval: 'daily',
-          time_period: 20,
-          apikey: this.alphaVantageKey
+          period: 20,
+          type: 'cci',
+          apikey: FMP_API_KEY
         },
         timeout: 15000
       });
 
-      const cciData = response.data['Technical Analysis: CCI'];
-      if (!cciData) {
-        console.log(`⚠️ No CCI data for ${symbol}`);
-        return { cci: null };
+      console.log(`📊 FMP CCI response for ${symbol}:`, response.data?.length || 0, 'records');
+
+      if (response.data && response.data.length > 0) {
+        // Get the most recent CCI value
+        const latestCCI = response.data[0];
+        if (latestCCI && latestCCI.cci !== undefined) {
+          const cciValue = parseFloat(latestCCI.cci);
+          console.log(`✅ CCI from FMP for ${symbol}: ${cciValue}`);
+          return { cci: cciValue };
+        }
       }
 
-      // Get the most recent CCI value
-      const dates = Object.keys(cciData);
-      if (dates.length === 0) {
-        return { cci: null };
-      }
-
-      const latestDate = dates[0];
-      const cciValue = parseFloat(cciData[latestDate]['CCI']);
+      console.log(`⚠️ No CCI data from FMP for ${symbol}, trying alternative endpoint...`);
       
-      console.log(`✅ CCI for ${symbol}: ${cciValue}`);
-      return { cci: cciValue };
+      // Alternative FMP endpoint for technical indicators
+      const altResponse = await axios.get(`https://financialmodelingprep.com/api/v3/technical_indicator/1day/${symbol.toUpperCase()}`, {
+        params: {
+          period: 20,
+          type: 'cci',
+          apikey: FMP_API_KEY
+        },
+        timeout: 15000
+      });
+
+      if (altResponse.data && altResponse.data.length > 0) {
+        const latestCCI = altResponse.data[0];
+        if (latestCCI && latestCCI.cci !== undefined) {
+          const cciValue = parseFloat(latestCCI.cci);
+          console.log(`✅ CCI from FMP (alternative) for ${symbol}: ${cciValue}`);
+          return { cci: cciValue };
+        }
+      }
+
+      console.log(`⚠️ No CCI data available from FMP for ${symbol}`);
+      return { cci: null };
       
     } catch (error) {
-      console.log(`⚠️ CCI fetch failed for ${symbol}`);
+      console.log(`⚠️ FMP CCI fetch failed for ${symbol}:`, error.message);
       return { cci: null };
     }
   }
@@ -818,10 +929,64 @@ Keep it concise and professional.`;
       };
     }
   }
+
+  async quickPriceTest(symbol = 'AAPL') {
+    console.log(`🧪 QUICK TEST: Testing price fetch (Alpha Vantage) for ${symbol}...`);
+    
+    try {
+      const priceData = await this.getCurrentPrice(symbol);
+      console.log(`✅ QUICK TEST: Successfully fetched price for ${symbol}: $${priceData.price}`);
+      return {
+        success: true,
+        price: priceData.price,
+        message: `✅ Alpha Vantage working! ${symbol}: $${priceData.price} (Price source only)`
+      };
+    } catch (error) {
+      console.log(`❌ QUICK TEST: Failed to fetch price for ${symbol}:`, error.message);
+      return {
+        success: false,
+        error: error.message,
+        message: `❌ Alpha Vantage Error: ${error.message}`
+      };
+    }
+  }
+
+  async quickTechnicalTest(symbol = 'AAPL') {
+    console.log(`🧪 TECHNICAL TEST: Testing FMP indicators for ${symbol}...`);
+    
+    try {
+      // Test RSI from FMP
+      const rsiData = await this.getRSI(symbol);
+      const vwapData = await this.getVWAP(symbol);
+      const cciData = await this.getCCI(symbol);
+      
+      const results = {
+        rsi: rsiData.rsi,
+        vwap: vwapData.vwap,
+        vwapSource: vwapData.source,
+        cci: cciData.cci
+      };
+      
+      console.log(`✅ TECHNICAL TEST: FMP indicators for ${symbol}:`, results);
+      
+      return {
+        success: true,
+        results: results,
+        message: `✅ FMP indicators working! RSI: ${rsiData.rsi || 'N/A'}, VWAP: $${vwapData.vwap || 'N/A'}, CCI: ${cciData.cci || 'N/A'}`
+      };
+    } catch (error) {
+      console.log(`❌ TECHNICAL TEST: Failed for ${symbol}:`, error.message);
+      return {
+        success: false,
+        error: error.message,
+        message: `❌ FMP Error: ${error.message}`
+      };
+    }
+  }
 }
 
 console.log('🚀 TECHNICAL ANALYSIS: Creating technical analysis service instance...');
 const technicalAnalysisService = new TechnicalAnalysisService();
-console.log('✅ TECHNICAL ANALYSIS: Service ready with AI trading analysis');
+console.log('✅ TECHNICAL ANALYSIS: Service ready - FMP indicators + Alpha Vantage price + DeepSeek AI');
 
 module.exports = technicalAnalysisService; 
