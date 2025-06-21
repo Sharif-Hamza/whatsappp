@@ -1,4 +1,4 @@
-// Fentrix Stock Bot - Fixed Version
+// Fentrix Stock Bot - Fixed Version// Fentrix Stock Bot - Fixed Version
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
@@ -786,7 +786,8 @@ client.on('message_create', async (msg) => {
             debugInfo += '📊 *SERVICE STATUS:*\n';
             debugInfo += `• Stock Service: ${stockService ? '✅ Loaded' : '❌ Failed'}\n`;
             debugInfo += `• Sentiment Service: ${enhancedSentimentService ? '✅ Loaded' : '❌ Failed'}\n`;
-            debugInfo += `• Alert Service: ${alertService ? '✅ Loaded' : '❌ Failed'}\n\n`;
+            debugInfo += `• Alert Service: ${alertService ? '✅ Loaded' : '❌ Failed'}\n`;
+            debugInfo += `• Technical Analysis: ${technicalAnalysisService ? '✅ Loaded (FMP + Alpha Vantage + DeepSeek AI)' : '❌ Failed'}\n\n`;
             
             // Service functionality tests
             if (stockService) {
@@ -802,8 +803,9 @@ client.on('message_create', async (msg) => {
             
             // Configuration status
             debugInfo += '⚙️ *CONFIGURATION:*\n';
-            debugInfo += `• Alpha Vantage Key: ${config.ALPHA_VANTAGE_API_KEY ? '✅ Set' : '❌ Missing'}\n`;
-            debugInfo += `• DeepSeek Key: ${config.DEEPSEEK_API_KEY ? '✅ Set' : '❌ Missing'}\n`;
+            debugInfo += `• Alpha Vantage Key: ${config.ALPHA_VANTAGE_API_KEY ? '✅ Set (Price data only)' : '❌ Missing'}\n`;
+            debugInfo += `• FMP Key: ${config.FMP_API_KEY ? '✅ Set (RSI/VWAP/CCI)' : '❌ Missing'}\n`;
+            debugInfo += `• DeepSeek Key: ${config.DEEPSEEK_API_KEY ? '✅ Set (AI analysis)' : '❌ Missing'}\n`;
             debugInfo += `• Stock API: ${config.STOCK_API_BASE ? '✅ Set' : '❌ Missing'}\n`;
             debugInfo += `• Crypto API: ${config.CRYPTO_API_BASE ? '✅ Set' : '❌ Missing'}\n\n`;
             
@@ -828,7 +830,8 @@ client.on('message_create', async (msg) => {
             debugInfo += '📈 !stock AAPL - Test stock data\n';
             debugInfo += '🪙 !crypto bitcoin - Test crypto data\n';
             debugInfo += '🚨 !alert AAPL $190.00 - Test alerts\n';
-            debugInfo += '🧠 !sentiment AAPL - Test sentiment\n\n';
+            debugInfo += '🧠 !sentiment AAPL - Test sentiment\n';
+            debugInfo += '🔬 !checktest - Test technical analysis (FMP + Alpha Vantage)\n\n';
             debugInfo += '🤖 *Powered by Fentrix.Ai*';
             
             await sendBotResponse(msg, debugInfo);
@@ -849,6 +852,27 @@ client.on('message_create', async (msg) => {
                   if (testResults.cryptoError) {
                     testReport += `   Error: ${testResults.cryptoError}\n`;
                   }
+                  
+                  // Test technical analysis if available
+                  if (technicalAnalysisService) {
+                    console.log('🔍 Testing technical analysis APIs...');
+                    const priceTest = await technicalAnalysisService.quickPriceTest('AAPL');
+                    const techTest = await technicalAnalysisService.quickTechnicalTest('AAPL');
+                    
+                    testReport += `📈 *Alpha Vantage (Price):* ${priceTest.success ? '✅ Working' : '❌ Failed'}\n`;
+                    if (!priceTest.success && priceTest.error) {
+                      testReport += `   Error: ${priceTest.error}\n`;
+                    }
+                    
+                    testReport += `📊 *FMP (Indicators):* ${techTest.success ? '✅ Working' : '❌ Failed'}\n`;
+                    if (!techTest.success && techTest.error) {
+                      testReport += `   Error: ${techTest.error}\n`;
+                    }
+                    
+                    console.log('✅ Alpha Vantage (price) test:', priceTest.success ? 'PASSED' : 'FAILED', '-', priceTest.message);
+                    console.log('✅ FMP (indicators) test:', techTest.success ? 'PASSED' : 'FAILED', '-', techTest.message);
+                  }
+                  
                   testReport += '\n🤖 *Powered by Fentrix.Ai*';
                   
                   await sendBotResponse(msg, testReport);
@@ -862,6 +886,65 @@ client.on('message_create', async (msg) => {
           } catch (error) {
             console.error('❌ Debug command failed:', error.message);
             await sendBotResponse(msg, `❌ Debug command failed: ${error.message}\n\n🤖 Powered by Fentrix.Ai`);
+          }
+        }
+
+        // Technical Analysis Debug command
+        else if (text.includes('!checktest')) {
+          if (!technicalAnalysisService) {
+            await sendBotResponse(msg, '❌ Technical analysis service not available.');
+            return;
+          }
+
+          console.log('🧪 TECHNICAL ANALYSIS DEBUG TEST');
+          
+          try {
+            await sendBotResponse(msg, '🧪 Testing technical analysis service...\n📊 Testing Alpha Vantage (price) + FMP (indicators)...\nPlease wait...');
+            
+            const priceTest = await technicalAnalysisService.quickPriceTest('AAPL');
+            const techTest = await technicalAnalysisService.quickTechnicalTest('AAPL');
+            
+            let responseText = '🧪 *TECHNICAL ANALYSIS DEBUG TEST* 📊\n\n';
+            responseText += `🔬 Service Status: ${technicalAnalysisService ? '✅ Loaded' : '❌ Failed'}\n\n`;
+            
+            responseText += '📈 *ALPHA VANTAGE (PRICE):*\n';
+            responseText += `• Status: ${priceTest.success ? '✅ Success' : '❌ Failed'}\n`;
+            responseText += `• Result: ${priceTest.message}\n\n`;
+            
+            responseText += '📊 *FMP (INDICATORS):*\n';
+            responseText += `• Status: ${techTest.success ? '✅ Success' : '❌ Failed'}\n`;
+            responseText += `• Result: ${techTest.message}\n\n`;
+            
+            if (!priceTest.success || !techTest.success) {
+              responseText += '🔧 *ISSUES DETECTED:*\n';
+              
+              if (!priceTest.success) {
+                responseText += `• Alpha Vantage: ${priceTest.error}\n`;
+                if (priceTest.error && priceTest.error.includes('Rate Limit')) {
+                  responseText += '  ⚠️ Rate limit detected! Wait 1-2 minutes\n';
+                }
+              }
+              
+              if (!techTest.success) {
+                responseText += `• FMP: ${techTest.error}\n`;
+              }
+              
+              responseText += '\n💡 *SOLUTIONS:*\n';
+              responseText += '• Wait 1-2 minutes between tests\n';
+              responseText += '• Try different symbol (!checktest TSLA)\n';
+              responseText += '• Check Railway logs for details\n\n';
+            } else {
+              responseText += '🎉 *ALL SYSTEMS OPERATIONAL!*\n';
+              responseText += '✅ Ready for !check commands\n\n';
+            }
+            
+            responseText += '🤖 *Powered by Fentrix.Ai*';
+            
+            await sendBotResponse(msg, responseText);
+            
+          } catch (error) {
+            console.log(`❌ Technical analysis debug test failed:`, error.message);
+            await sendBotResponse(msg, `❌ Technical analysis debug test failed: ${error.message}\n\n💡 This is likely due to API rate limiting from Alpha Vantage.\n⏰ Wait 1-2 minutes and try again.\n\n🤖 Powered by Fentrix.Ai`);
           }
         }
         
@@ -1093,7 +1176,7 @@ client.on('message_create', async (msg) => {
           console.log(`🔬 TECHNICAL ANALYSIS COMMAND: ${symbol}`);
           
           try {
-            await sendBotResponse(msg, `🔬 Analyzing ${symbol} with AI trading intelligence...\n📊 Fetching RSI, VWAP, CCI indicators...\n🤖 DeepSeek AI processing market signals...\n📈 Generating buy/sell/hold recommendations...\nPlease wait...`);
+            await sendBotResponse(msg, `🔬 Analyzing ${symbol} with AI trading intelligence...\n📊 Fetching RSI, VWAP, CCI from FMP...\n💰 Getting current price from Alpha Vantage...\n🤖 DeepSeek AI processing market signals...\n📈 Generating buy/sell/hold recommendations...\nPlease wait...`);
             
             // Get complete technical analysis
             const analysisData = await technicalAnalysisService.getStockAnalysis(symbol);
@@ -1178,6 +1261,8 @@ client.on('message_create', async (msg) => {
 ❓ *OTHER COMMANDS:*
 • !help - Show this help
 • !test - Test bot functionality
+• !debug - Debug service status
+• !checktest - Test technical analysis API
 
 🔥 *ENHANCED FEATURES:*
 ✅ Real-time stock/crypto prices
