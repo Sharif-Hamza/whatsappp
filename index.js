@@ -1,4 +1,4 @@
-// Fentrix Stock Bot - Fixed Version// Fentrix Stock Bot - Fixed Version
+// Fentrix Stock Bot - Fixed Version
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
@@ -390,7 +390,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 });
 
 // Import services with enhanced Railway debugging
-let stockService, enhancedSentimentService, alertService;
+let stockService, enhancedSentimentService, alertService, technicalAnalysisService;
 
 console.log('📦 LOADING SERVICE MODULES WITH ENHANCED DEBUGGING...');
 console.log('🔍 Current working directory:', process.cwd());
@@ -513,6 +513,21 @@ try {
     }
   }
   
+  console.log('\n🔬 LOADING TECHNICAL ANALYSIS SERVICE...');
+  
+  // PRIORITY 1: Try Technical Analysis Service with AI
+  try {
+    console.log('🔄 PRIORITY 1: Attempting to load TECHNICAL ANALYSIS service...');
+    technicalAnalysisService = require('./services/technicalAnalysisService');
+    console.log('✅ TECHNICAL ANALYSIS SERVICE LOADED SUCCESSFULLY!');
+    console.log('📊 Technical analysis service type:', typeof technicalAnalysisService);
+    console.log('🤖 AI trading analysis with RSI, VWAP, CCI available');
+  } catch (technicalError) {
+    console.error('❌ TECHNICAL ANALYSIS SERVICE LOADING FAILED:');
+    console.error('📝 Error message:', technicalError.message);
+    technicalAnalysisService = null;
+  }
+  
   // Enhanced summary of loaded services with fallback system
   console.log('\n📋 BULLETPROOF SERVICE LOADING SUMMARY:');
   const loadedServices = [];
@@ -541,13 +556,22 @@ try {
     console.log('❌ Alert Service: COMPLETELY FAILED (both main + fallback)');
   }
   
+  if (technicalAnalysisService) {
+    loadedServices.push('Technical Analysis Service');
+    console.log('✅ Technical Analysis Service: LOADED');
+    console.log('🔬 RSI, VWAP, CCI + AI Trading Analysis: Ready');
+  } else {
+    console.log('❌ Technical Analysis Service: FAILED');
+  }
+  
   if (loadedServices.length > 0) {
-    console.log(`\n🎉 BULLETPROOF SUCCESS: ${loadedServices.length}/3 services loaded with fallback protection!`);
+    console.log(`\n🎉 BULLETPROOF SUCCESS: ${loadedServices.length}/4 services loaded with fallback protection!`);
     console.log('🔥 ALL BOT FEATURES ARE NOW OPERATIONAL:');
     console.log('📈 Real-time stock prices: ✅');
     console.log('🪙 Real-time crypto prices: ✅');
     console.log('🚨 Price alerts: ✅');
     console.log('🧠 Sentiment analysis: ✅');
+    console.log('🔬 Technical analysis with AI: ✅');
     console.log('🤖 Fentrix.Ai Professional Trading Bot: READY! 🚀');
   } else {
     console.log('\n❌ CRITICAL: ALL SERVICES FAILED (even fallbacks)');
@@ -669,6 +693,7 @@ client.on('ready', () => {
   console.log('🔥 ALL FEATURES OPERATIONAL - BOT IS LIVE!');
   console.log('📝 Test with: !test, !stock AAPL, !crypto bitcoin');
   console.log('🚨 Test alerts with: !alert AAPL $190.00');
+  console.log('🔬 Test technical analysis with: !check TSLA');
   console.log('🚀 Add bot to WhatsApp groups and start trading!');
   console.log('==========================================\n');
   
@@ -699,6 +724,7 @@ client.on('ready', () => {
   console.log(`📈 Stock Service: ${stockService ? '✅ Ready for real-time prices' : '❌ Not available'}`);
   console.log(`🚨 Alert Service: ${alertService ? '✅ Ready for live monitoring' : '❌ Not available'}`);
   console.log(`🧠 Sentiment Service: ${enhancedSentimentService ? '✅ Ready for analysis' : '❌ Not available'}`);
+  console.log(`🔬 Technical Analysis: ${technicalAnalysisService ? '✅ Ready for AI trading analysis' : '❌ Not available'}`);
   
   if (stockService && alertService) {
     console.log('\n🎉 PERFECT! All core services operational!');
@@ -1056,6 +1082,70 @@ client.on('message_create', async (msg) => {
           }
         }
         
+        // Technical Analysis command - NEW !check FEATURE
+        else if (text.startsWith('!check ')) {
+          if (!technicalAnalysisService) {
+            await sendBotResponse(msg, '❌ Technical analysis service not available. Please try again later.');
+            return;
+          }
+          
+          const symbol = text.replace('!check ', '').trim().toUpperCase();
+          console.log(`🔬 TECHNICAL ANALYSIS COMMAND: ${symbol}`);
+          
+          try {
+            await sendBotResponse(msg, `🔬 Analyzing ${symbol} with AI trading intelligence...\n📊 Fetching RSI, VWAP, CCI indicators...\n🤖 DeepSeek AI processing market signals...\n📈 Generating buy/sell/hold recommendations...\nPlease wait...`);
+            
+            // Get complete technical analysis
+            const analysisData = await technicalAnalysisService.getStockAnalysis(symbol);
+            console.log(`✅ Technical data retrieved for ${symbol}`);
+            
+            // Get AI analysis
+            const aiAnalysis = await technicalAnalysisService.analyzeWithAI(analysisData);
+            console.log(`✅ AI analysis completed for ${symbol}`);
+            
+            // Format and send the complete analysis
+            const formattedAnalysis = technicalAnalysisService.formatAnalysisDisplay(analysisData, aiAnalysis);
+            await sendBotResponse(msg, formattedAnalysis);
+            
+            console.log(`✅ TECHNICAL ANALYSIS: Complete analysis sent for ${symbol}`);
+            
+            // Optional: Create alert based on AI recommendation if confidence is high
+            if (aiAnalysis.confidence > 75 && aiAnalysis.signal !== 'HOLD' && alertService) {
+              console.log(`🚨 High confidence ${aiAnalysis.signal} signal for ${symbol}, suggesting alert...`);
+              
+              let suggestedPrice;
+              if (aiAnalysis.target && aiAnalysis.target !== 'N/A') {
+                // Extract price from target if available
+                const targetMatch = aiAnalysis.target.match(/\$?([\d.,]+)/);
+                if (targetMatch) {
+                  suggestedPrice = parseFloat(targetMatch[1].replace(/,/g, ''));
+                }
+              }
+              
+              if (!suggestedPrice) {
+                // Calculate suggested alert price based on signal and current price
+                const currentPrice = analysisData.currentPrice;
+                if (aiAnalysis.signal === 'BUY') {
+                  suggestedPrice = currentPrice * 1.05; // 5% above current for buy signal
+                } else if (aiAnalysis.signal === 'SELL') {
+                  suggestedPrice = currentPrice * 0.95; // 5% below current for sell signal
+                }
+              }
+              
+              if (suggestedPrice) {
+                setTimeout(async () => {
+                  const alertSuggestion = `💡 *SMART ALERT SUGGESTION* 🤖\n\nBased on the high-confidence ${aiAnalysis.signal} signal for ${symbol}, consider setting an alert:\n\n🚨 !alert ${symbol} $${suggestedPrice.toFixed(2)}\n\n⚡ AI Confidence: ${aiAnalysis.confidence}%\n🎯 This will notify you when the target is reached!\n\n🤖 Powered by Fentrix.Ai`;
+                  await sendBotResponse(msg, alertSuggestion);
+                }, 2000);
+              }
+            }
+            
+          } catch (error) {
+            console.log(`❌ Technical analysis failed for ${symbol}:`, error.message);
+            await sendBotResponse(msg, `❌ Could not complete technical analysis for ${symbol}\n\nError: ${error.message}\n\n💡 Try: !check AAPL, !check TSLA, !check GOOGL\n\n🤖 Powered by Fentrix.Ai`);
+          }
+        }
+        
         // Help command
         else if (text.includes('!help')) {
           console.log('❓ HELP COMMAND');
@@ -1080,6 +1170,11 @@ client.on('message_create', async (msg) => {
 • !sentiment - General market sentiment with web data
 • !sentiment AAPL - Professional sentiment for specific stock
 
+🔬 *AI TECHNICAL ANALYSIS COMMANDS:*
+• !check TSLA - Complete technical analysis with RSI, VWAP, CCI
+• !check AAPL - AI buy/sell/hold recommendations
+• !check GOOGL - Professional trading analysis with timing
+
 ❓ *OTHER COMMANDS:*
 • !help - Show this help
 • !test - Test bot functionality
@@ -1087,9 +1182,12 @@ client.on('message_create', async (msg) => {
 🔥 *ENHANCED FEATURES:*
 ✅ Real-time stock/crypto prices
 ✅ Professional sentiment analysis
+✅ AI technical analysis (RSI, VWAP, CCI)
 ✅ Real-time news integration
 ✅ Clean professional responses
 ✅ Price alerts with LIVE monitoring
+✅ Buy/sell/hold AI recommendations
+✅ Smart alert suggestions
 ✅ Group mode - anyone can use
 ✅ 24/7 Railway cloud hosting
 ✅ Powered by Fentrix.Ai
@@ -1098,6 +1196,7 @@ client.on('message_create', async (msg) => {
 📈 !stock AAPL
 🪙 !crypto bitcoin
 🚨 !alert bitcoin $45000
+🔬 !check TSLA
 
 👥 Anyone in this group can use ALL commands!
 🤖 Powered by Fentrix.Ai - Professional market analysis!`;
