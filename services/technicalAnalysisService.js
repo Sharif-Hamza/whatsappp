@@ -5,7 +5,7 @@ console.log('🔄 TECHNICAL ANALYSIS SERVICE INITIALIZING...');
 // API Keys
 const ALPHA_VANTAGE_API_KEY = process.env.ALPHA_VANTAGE_API_KEY || '18PO9ZL6HV4F00C6';
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || 'sk-46c91ac26c5f4a7896779c5a6b3db08a';
-const TAAPI_API_KEY = process.env.TAAPI_API_KEY || 'FREE'; // Free tier
+const TAAPI_API_KEY = process.env.TAAPI_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbHVlIjoiNjg1NjM1ZWE4MDZmZjE2NTFlYTk3MWVlIiwiaWF0IjoxNzUwNDgwMzc4LCJleHAiOjMzMjU0OTQ0Mzc4fQ.OawARvdzrNC1fcEcueMk0M2Ijii_mNDUNovPl04YkI0';
 
 console.log('📊 Technical Analysis Service - Alpha Vantage + DeepSeek AI configured');
 
@@ -191,30 +191,35 @@ class TechnicalAnalysisService {
     }
   }
 
-  // NEW: TAAPI.IO VWAP (Free 5,000 calls/day)
+  // FIXED: TAAPI.IO VWAP with correct US stock format
   async getVWAPFromTaapi(symbol) {
     try {
+      console.log(`🔄 TAAPI.IO: Fetching VWAP for ${symbol} with real API key...`);
+      
       const response = await axios.get('https://api.taapi.io/vwap', {
         params: {
-          secret: TAAPI_API_KEY === 'FREE' ? undefined : TAAPI_API_KEY,
-          exchange: 'US',
-          symbol: `${symbol.toUpperCase()}/USD`,
-          interval: '15m'
+          secret: TAAPI_API_KEY,
+          symbol: symbol.toUpperCase(), 
+          type: 'stocks', // MANDATORY for US stocks!
+          interval: '1h'
         },
-        timeout: 10000
+        timeout: 15000
       });
+
+      console.log(`📊 TAAPI.IO Response for ${symbol}:`, response.data);
 
       if (response.data && response.data.value) {
         return {
           vwap: parseFloat(response.data.value),
           volume: response.data.volume || 0,
-          source: 'TAAPI.IO'
+          source: 'TAAPI.IO (Real-time)'
         };
       }
       
-      throw new Error('No VWAP data from TAAPI.IO');
+      throw new Error('No VWAP value in TAAPI.IO response');
       
     } catch (error) {
+      console.error(`❌ TAAPI.IO VWAP error for ${symbol}:`, error.response?.data || error.message);
       throw new Error(`TAAPI.IO VWAP failed: ${error.message}`);
     }
   }
