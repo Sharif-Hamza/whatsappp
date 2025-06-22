@@ -1,4 +1,4 @@
-const axios = require('axios');
+const axios = require('axios');const axios = require('axios');
 
 console.log('🔄 TECHNICAL ANALYSIS SERVICE INITIALIZING...');
 
@@ -565,55 +565,219 @@ class TechnicalAnalysisService {
 
   async getCCI(symbol) {
     try {
-      console.log(`📊 Fetching CCI from FMP for ${symbol}...`);
-      const response = await axios.get(`https://financialmodelingprep.com/api/v3/technical_indicator/daily/${symbol.toUpperCase()}`, {
-        params: {
-          period: 20,
-          type: 'cci',
-          apikey: FMP_API_KEY
-        },
-        timeout: 15000
-      });
-
-      console.log(`📊 FMP CCI response for ${symbol}:`, response.data?.length || 0, 'records');
-
-      if (response.data && response.data.length > 0) {
-        // Get the most recent CCI value
-        const latestCCI = response.data[0];
-        if (latestCCI && latestCCI.cci !== undefined) {
-          const cciValue = parseFloat(latestCCI.cci);
-          console.log(`✅ CCI from FMP for ${symbol}: ${cciValue}`);
-          return { cci: cciValue };
-        }
-      }
-
-      console.log(`⚠️ No CCI data from FMP for ${symbol}, trying alternative endpoint...`);
+      console.log(`📊 Fetching CCI for ${symbol} - trying multiple sources...`);
       
-      // Alternative FMP endpoint for technical indicators
-      const altResponse = await axios.get(`https://financialmodelingprep.com/api/v3/technical_indicator/1day/${symbol.toUpperCase()}`, {
-        params: {
-          period: 20,
-          type: 'cci',
-          apikey: FMP_API_KEY
-        },
-        timeout: 15000
-      });
+      // Method 1: FMP primary endpoint
+      try {
+        console.log(`🔄 Method 1: FMP daily CCI for ${symbol}...`);
+        const response = await axios.get(`https://financialmodelingprep.com/api/v3/technical_indicator/daily/${symbol.toUpperCase()}`, {
+          params: {
+            period: 20,
+            type: 'cci',
+            apikey: FMP_API_KEY
+          },
+          timeout: 15000
+        });
 
-      if (altResponse.data && altResponse.data.length > 0) {
-        const latestCCI = altResponse.data[0];
-        if (latestCCI && latestCCI.cci !== undefined) {
-          const cciValue = parseFloat(latestCCI.cci);
-          console.log(`✅ CCI from FMP (alternative) for ${symbol}: ${cciValue}`);
-          return { cci: cciValue };
+        console.log(`📊 FMP CCI response for ${symbol}:`, response.data?.length || 0, 'records');
+
+        if (response.data && response.data.length > 0) {
+          // Get the most recent CCI value
+          const latestCCI = response.data[0];
+          if (latestCCI && latestCCI.cci !== undefined) {
+            const cciValue = parseFloat(latestCCI.cci);
+            console.log(`✅ CCI from FMP (daily) for ${symbol}: ${cciValue}`);
+            return { cci: cciValue };
+          }
         }
+      } catch (error) {
+        console.log(`⚠️ FMP daily CCI failed for ${symbol}:`, error.message);
       }
 
-      console.log(`⚠️ No CCI data available from FMP for ${symbol}`);
+      // Method 2: FMP alternative endpoint
+      try {
+        console.log(`🔄 Method 2: FMP 1day CCI for ${symbol}...`);
+        const altResponse = await axios.get(`https://financialmodelingprep.com/api/v3/technical_indicator/1day/${symbol.toUpperCase()}`, {
+          params: {
+            period: 20,
+            type: 'cci',
+            apikey: FMP_API_KEY
+          },
+          timeout: 15000
+        });
+
+        console.log(`📊 FMP alternative CCI response for ${symbol}:`, altResponse.data?.length || 0, 'records');
+
+        if (altResponse.data && altResponse.data.length > 0) {
+          const latestCCI = altResponse.data[0];
+          if (latestCCI && latestCCI.cci !== undefined) {
+            const cciValue = parseFloat(latestCCI.cci);
+            console.log(`✅ CCI from FMP (1day) for ${symbol}: ${cciValue}`);
+            return { cci: cciValue };
+          }
+        }
+      } catch (error) {
+        console.log(`⚠️ FMP 1day CCI failed for ${symbol}:`, error.message);
+      }
+
+      // Method 3: FMP different endpoint structure
+      try {
+        console.log(`🔄 Method 3: FMP historical technical indicators for ${symbol}...`);
+        const histResponse = await axios.get(`https://financialmodelingprep.com/api/v3/historical-price-full/${symbol.toUpperCase()}`, {
+          params: {
+            apikey: FMP_API_KEY,
+            timeseries: 5
+          },
+          timeout: 15000
+        });
+
+        if (histResponse.data && histResponse.data.historical && histResponse.data.historical.length > 0) {
+          // Try to calculate CCI manually using the historical data
+          const cciValue = await this.calculateCCIManually(symbol, histResponse.data.historical);
+          if (cciValue !== null) {
+            console.log(`✅ CCI calculated from FMP historical data for ${symbol}: ${cciValue}`);
+            return { cci: cciValue };
+          }
+        }
+      } catch (error) {
+        console.log(`⚠️ FMP historical CCI calculation failed for ${symbol}:`, error.message);
+      }
+
+      // Method 4: Alpha Vantage CCI (FALLBACK)
+      try {
+        console.log(`🔄 Method 4: Alpha Vantage CCI fallback for ${symbol}...`);
+        const avResponse = await axios.get('https://www.alphavantage.co/query', {
+          params: {
+            function: 'CCI',
+            symbol: symbol.toUpperCase(),
+            interval: 'daily',
+            time_period: 20,
+            apikey: this.alphaVantageKey
+          },
+          timeout: 15000
+        });
+
+        // Check for rate limiting
+        if (avResponse.data && avResponse.data['Note']) {
+          console.log(`⚠️ Alpha Vantage CCI rate limit: ${avResponse.data['Note']}`);
+        } else {
+          const cciData = avResponse.data['Technical Analysis: CCI'];
+          if (cciData && Object.keys(cciData).length > 0) {
+            // Get the most recent CCI value
+            const dates = Object.keys(cciData);
+            const latestDate = dates[0];
+            const cciValue = parseFloat(cciData[latestDate]['CCI']);
+            
+            console.log(`✅ CCI from Alpha Vantage for ${symbol}: ${cciValue}`);
+            return { cci: cciValue };
+          }
+        }
+      } catch (error) {
+        console.log(`⚠️ Alpha Vantage CCI failed for ${symbol}:`, error.message);
+      }
+
+      // Method 5: Simple CCI estimation based on price data
+      try {
+        console.log(`🔄 Method 5: CCI estimation for ${symbol}...`);
+        const estimatedCCI = await this.estimateCCI(symbol);
+        if (estimatedCCI !== null) {
+          console.log(`📊 CCI estimated for ${symbol}: ${estimatedCCI}`);
+          return { cci: estimatedCCI };
+        }
+      } catch (error) {
+        console.log(`⚠️ CCI estimation failed for ${symbol}:`, error.message);
+      }
+
+      console.log(`❌ All CCI methods failed for ${symbol}`);
       return { cci: null };
       
     } catch (error) {
-      console.log(`⚠️ FMP CCI fetch failed for ${symbol}:`, error.message);
+      console.log(`❌ CCI fetch completely failed for ${symbol}:`, error.message);
       return { cci: null };
+    }
+  }
+
+  // Manual CCI calculation using historical price data
+  async calculateCCIManually(symbol, historicalData) {
+    try {
+      if (!historicalData || historicalData.length < 20) {
+        return null;
+      }
+
+      const period = 20;
+      const recentData = historicalData.slice(0, period);
+      
+      // Calculate typical prices
+      const typicalPrices = recentData.map(day => {
+        const high = parseFloat(day.high);
+        const low = parseFloat(day.low);
+        const close = parseFloat(day.close);
+        return (high + low + close) / 3;
+      });
+
+      // Calculate moving average of typical prices
+      const smaTP = typicalPrices.reduce((sum, tp) => sum + tp, 0) / typicalPrices.length;
+
+      // Calculate mean deviation
+      const meanDeviation = typicalPrices.reduce((sum, tp) => sum + Math.abs(tp - smaTP), 0) / typicalPrices.length;
+
+      // Calculate CCI
+      const currentTypicalPrice = typicalPrices[0];
+      const cci = (currentTypicalPrice - smaTP) / (0.015 * meanDeviation);
+
+      console.log(`📊 Manual CCI calculation for ${symbol}: ${cci.toFixed(2)}`);
+      return cci;
+      
+    } catch (error) {
+      console.log(`⚠️ Manual CCI calculation failed for ${symbol}:`, error.message);
+      return null;
+    }
+  }
+
+  // CCI estimation based on current price volatility
+  async estimateCCI(symbol) {
+    try {
+      // Get recent price data from Alpha Vantage
+      const response = await axios.get('https://www.alphavantage.co/query', {
+        params: {
+          function: 'TIME_SERIES_DAILY',
+          symbol: symbol.toUpperCase(),
+          outputsize: 'compact',
+          apikey: this.alphaVantageKey
+        },
+        timeout: 15000
+      });
+
+      const timeSeries = response.data['Time Series (Daily)'];
+      if (!timeSeries) {
+        return null;
+      }
+
+      const dates = Object.keys(timeSeries).slice(0, 20); // Last 20 days
+      if (dates.length < 20) {
+        return null;
+      }
+
+      // Calculate typical prices for estimation
+      const typicalPrices = dates.map(date => {
+        const data = timeSeries[date];
+        const high = parseFloat(data['2. high']);
+        const low = parseFloat(data['3. low']);
+        const close = parseFloat(data['4. close']);
+        return (high + low + close) / 3;
+      });
+
+      // Simple CCI estimation
+      const smaTP = typicalPrices.reduce((sum, tp) => sum + tp, 0) / typicalPrices.length;
+      const meanDeviation = typicalPrices.reduce((sum, tp) => sum + Math.abs(tp - smaTP), 0) / typicalPrices.length;
+      const currentTypicalPrice = typicalPrices[0];
+      const estimatedCCI = (currentTypicalPrice - smaTP) / (0.015 * meanDeviation);
+
+      return estimatedCCI;
+      
+    } catch (error) {
+      console.log(`⚠️ CCI estimation failed for ${symbol}:`, error.message);
+      return null;
     }
   }
 
@@ -952,10 +1116,10 @@ Keep it concise and professional.`;
   }
 
   async quickTechnicalTest(symbol = 'AAPL') {
-    console.log(`🧪 TECHNICAL TEST: Testing FMP indicators for ${symbol}...`);
+    console.log(`🧪 TECHNICAL TEST: Testing indicators from multiple sources for ${symbol}...`);
     
     try {
-      // Test RSI from FMP
+      // Test indicators from multiple sources
       const rsiData = await this.getRSI(symbol);
       const vwapData = await this.getVWAP(symbol);
       const cciData = await this.getCCI(symbol);
@@ -967,19 +1131,25 @@ Keep it concise and professional.`;
         cci: cciData.cci
       };
       
-      console.log(`✅ TECHNICAL TEST: FMP indicators for ${symbol}:`, results);
+      console.log(`✅ TECHNICAL TEST: Multi-source indicators for ${symbol}:`, results);
+      
+      // Count successful indicators
+      const successCount = Object.values(results).filter(val => val !== null && val !== undefined).length;
+      const totalIndicators = 3; // RSI, VWAP, CCI
+      
+      const successRate = `${successCount}/${totalIndicators}`;
       
       return {
-        success: true,
+        success: successCount > 0, // Success if we get at least one indicator
         results: results,
-        message: `✅ FMP indicators working! RSI: ${rsiData.rsi || 'N/A'}, VWAP: $${vwapData.vwap || 'N/A'}, CCI: ${cciData.cci || 'N/A'}`
+        message: `✅ Technical indicators (${successRate}): RSI: ${rsiData.rsi ? rsiData.rsi.toFixed(2) : 'N/A'}, VWAP: $${vwapData.vwap ? vwapData.vwap.toFixed(2) : 'N/A'}, CCI: ${cciData.cci ? cciData.cci.toFixed(2) : 'N/A'}`
       };
     } catch (error) {
       console.log(`❌ TECHNICAL TEST: Failed for ${symbol}:`, error.message);
       return {
         success: false,
         error: error.message,
-        message: `❌ FMP Error: ${error.message}`
+        message: `❌ Technical indicators error: ${error.message}`
       };
     }
   }
