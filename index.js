@@ -1,4 +1,3 @@
-
 // Fentrix Stock Bot - Fixed Version
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
@@ -858,6 +857,7 @@ client.on('message_create', async (msg) => {
             debugInfo += '🚨 !alert AAPL $190.00 - Test alerts\n';
             debugInfo += '🧠 !sentiment AAPL - Test sentiment\n';
             debugInfo += '🔬 !checktest - Test technical analysis (Multi-source)\n';
+            debugInfo += '🎯 !snipetest - Test snipe service components\n';
             debugInfo += '🎯 !snipe market - Test swing trading scanner\n\n';
             debugInfo += '🤖 *Powered by Fentrix.Ai*';
             
@@ -913,6 +913,43 @@ client.on('message_create', async (msg) => {
           } catch (error) {
             console.error('❌ Debug command failed:', error.message);
             await sendBotResponse(msg, `❌ Debug command failed: ${error.message}\n\n🤖 Powered by Fentrix.Ai`);
+          }
+        }
+
+        // Snipe Test command
+        else if (text.includes('!snipetest')) {
+          if (!snipeService) {
+            await sendBotResponse(msg, '❌ Snipe service not available.');
+            return;
+          }
+
+          console.log('🧪 SNIPE TEST COMMAND');
+          
+          try {
+            await sendBotResponse(msg, '🧪 Testing snipe service components...\n📊 Testing stock analysis...\nPlease wait...');
+            
+            // Test with a simple stock analysis
+            const testStock = { symbol: 'AAPL', price: 150, volume: 50000000 };
+            const testAnalysis = await snipeService.analyzeStock(testStock);
+            
+            let responseText = '🧪 *SNIPE SERVICE TEST* 🎯\n\n';
+            responseText += `📊 Test Stock: ${testStock.symbol}\n`;
+            responseText += `💰 Current Price: $${testAnalysis.currentPrice?.toFixed(2) || 'N/A'}\n`;
+            responseText += `📊 RSI: ${testAnalysis.rsi?.toFixed(1) || 'N/A'}\n`;
+            responseText += `⚖️ VWAP: $${testAnalysis.vwap?.toFixed(2) || 'N/A'}\n`;
+            responseText += `🌊 CCI: ${testAnalysis.cci?.toFixed(1) || 'N/A'}\n`;
+            responseText += `🎯 Buy Candidate: ${testAnalysis.isBuyCandidate ? '✅ Yes' : '❌ No'}\n`;
+            responseText += `📝 Strategy: ${testAnalysis.strategyReason || 'N/A'}\n\n`;
+            
+            responseText += `✅ *Service Status:* Working\n`;
+            responseText += `🔧 Ready for !snipe market command\n\n`;
+            responseText += `🤖 *Powered by Fentrix.Ai*`;
+            
+            await sendBotResponse(msg, responseText);
+            
+          } catch (error) {
+            console.log(`❌ Snipe test failed:`, error.message);
+            await sendBotResponse(msg, `❌ Snipe test failed: ${error.message}\n\n💡 This indicates an issue with:\n• API connectivity\n• Service configuration\n• Rate limiting\n\n🤖 Powered by Fentrix.Ai`);
           }
         }
 
@@ -1268,19 +1305,38 @@ client.on('message_create', async (msg) => {
           try {
             await sendBotResponse(msg, `🎯 *MARKET SNIPE INITIATED* 📊\n\n🔍 Scanning active US stocks (gainers + high volume)...\n📊 Analyzing technical indicators (RSI, VWAP, CCI)...\n🧠 Applying swing trading strategy:\n• RSI < 30 (Oversold)\n• CCI < -100 (Oversold)\n• Price > VWAP (Above average)\n📰 Checking news sentiment...\n🎯 Finding best opportunities...\n\n⏰ This may take 30-60 seconds...\nPlease wait...`);
             
-            // Execute snipe analysis
+            console.log('🎯 SNIPE: Starting executeSnipeAnalysis...');
+            
+            // Execute snipe analysis with enhanced error handling
             const snipeResults = await snipeService.executeSnipeAnalysis();
             console.log(`✅ Snipe analysis completed: ${snipeResults.candidates?.length || 0} candidates found`);
+            console.log('📊 Snipe results:', JSON.stringify(snipeResults, null, 2));
             
             // Format and send results
+            console.log('🎯 SNIPE: Formatting results...');
             const formattedResults = snipeService.formatSnipeResults(snipeResults);
+            console.log('🎯 SNIPE: Sending formatted results...');
+            
             await sendBotResponse(msg, formattedResults);
             
             console.log(`✅ SNIPE MARKET: Results sent to chat`);
             
           } catch (error) {
-            console.log(`❌ Snipe market analysis failed:`, error.message);
-            await sendBotResponse(msg, `❌ Market snipe analysis failed: ${error.message}\n\n💡 This could be due to:\n• API rate limits\n• Market hours\n• Network issues\n\n🔄 Try again in a few minutes\n\n🤖 Powered by Fentrix.Ai`);
+            console.error(`❌ Snipe market analysis failed:`, error);
+            console.error(`❌ Error stack:`, error.stack);
+            
+            let errorMessage = error.message || 'Unknown error occurred';
+            
+            // Check for specific error types
+            if (errorMessage.includes('timeout')) {
+              errorMessage = 'Request timeout - APIs may be slow';
+            } else if (errorMessage.includes('Rate Limit') || errorMessage.includes('429')) {
+              errorMessage = 'API rate limit reached - please wait a few minutes';
+            } else if (errorMessage.includes('Network')) {
+              errorMessage = 'Network connection issue';
+            }
+            
+            await sendBotResponse(msg, `❌ Market snipe analysis failed: ${errorMessage}\n\n💡 This could be due to:\n• API rate limits (try again in 5 minutes)\n• Weekend/after-hours (APIs may be slower)\n• Network connectivity issues\n• High API demand\n\n🔄 Try again in a few minutes\n\n🤖 Powered by Fentrix.Ai`);
           }
         }
         
@@ -1499,3 +1555,4 @@ console.log('🔍 Watch logs for QR code...');
 console.log('💡 If Chrome issues persist, bot will run with API-only functionality');
 console.log('🤖 Professional market analysis bot powered by Fentrix.Ai');
 console.log('🚀 DEPLOYMENT SUCCESSFUL!\n'); 
+
