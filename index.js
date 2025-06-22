@@ -1,4 +1,4 @@
-// Fentrix Stock Bot - Fixed Version// Fentrix Stock Bot - Fixed Version
+// Fentrix Stock Bot - Fixed Version
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const express = require('express');
@@ -787,7 +787,7 @@ client.on('message_create', async (msg) => {
             debugInfo += `• Stock Service: ${stockService ? '✅ Loaded' : '❌ Failed'}\n`;
             debugInfo += `• Sentiment Service: ${enhancedSentimentService ? '✅ Loaded' : '❌ Failed'}\n`;
             debugInfo += `• Alert Service: ${alertService ? '✅ Loaded' : '❌ Failed'}\n`;
-            debugInfo += `• Technical Analysis: ${technicalAnalysisService ? '✅ Loaded (FMP + Alpha Vantage + DeepSeek AI)' : '❌ Failed'}\n\n`;
+            debugInfo += `• Technical Analysis: ${technicalAnalysisService ? '✅ Loaded (Multi-source: FMP + Alpha Vantage + DeepSeek AI)' : '❌ Failed'}\n\n`;
             
             // Service functionality tests
             if (stockService) {
@@ -804,7 +804,7 @@ client.on('message_create', async (msg) => {
             // Configuration status
             debugInfo += '⚙️ *CONFIGURATION:*\n';
             debugInfo += `• Alpha Vantage Key: ${config.ALPHA_VANTAGE_API_KEY ? '✅ Set (Price data only)' : '❌ Missing'}\n`;
-            debugInfo += `• FMP Key: ${config.FMP_API_KEY ? '✅ Set (RSI/VWAP/CCI)' : '❌ Missing'}\n`;
+            debugInfo += `• FMP Key: ${config.FMP_API_KEY ? '✅ Set (RSI/VWAP/CCI primary)' : '❌ Missing'}\n`;
             debugInfo += `• DeepSeek Key: ${config.DEEPSEEK_API_KEY ? '✅ Set (AI analysis)' : '❌ Missing'}\n`;
             debugInfo += `• Stock API: ${config.STOCK_API_BASE ? '✅ Set' : '❌ Missing'}\n`;
             debugInfo += `• Crypto API: ${config.CRYPTO_API_BASE ? '✅ Set' : '❌ Missing'}\n\n`;
@@ -831,7 +831,7 @@ client.on('message_create', async (msg) => {
             debugInfo += '🪙 !crypto bitcoin - Test crypto data\n';
             debugInfo += '🚨 !alert AAPL $190.00 - Test alerts\n';
             debugInfo += '🧠 !sentiment AAPL - Test sentiment\n';
-            debugInfo += '🔬 !checktest - Test technical analysis (FMP + Alpha Vantage)\n\n';
+            debugInfo += '🔬 !checktest - Test technical analysis (Multi-source)\n\n';
             debugInfo += '🤖 *Powered by Fentrix.Ai*';
             
             await sendBotResponse(msg, debugInfo);
@@ -864,13 +864,13 @@ client.on('message_create', async (msg) => {
                       testReport += `   Error: ${priceTest.error}\n`;
                     }
                     
-                    testReport += `📊 *FMP (Indicators):* ${techTest.success ? '✅ Working' : '❌ Failed'}\n`;
+                    testReport += `📊 *Technical Indicators (Multi-source):* ${techTest.success ? '✅ Working' : '❌ Failed'}\n`;
                     if (!techTest.success && techTest.error) {
                       testReport += `   Error: ${techTest.error}\n`;
                     }
                     
                     console.log('✅ Alpha Vantage (price) test:', priceTest.success ? 'PASSED' : 'FAILED', '-', priceTest.message);
-                    console.log('✅ FMP (indicators) test:', techTest.success ? 'PASSED' : 'FAILED', '-', techTest.message);
+                    console.log('✅ Technical indicators (multi-source) test:', techTest.success ? 'PASSED' : 'FAILED', '-', techTest.message);
                   }
                   
                   testReport += '\n🤖 *Powered by Fentrix.Ai*';
@@ -899,7 +899,7 @@ client.on('message_create', async (msg) => {
           console.log('🧪 TECHNICAL ANALYSIS DEBUG TEST');
           
           try {
-            await sendBotResponse(msg, '🧪 Testing technical analysis service...\n📊 Testing Alpha Vantage (price) + FMP (indicators)...\nPlease wait...');
+            await sendBotResponse(msg, '🧪 Testing technical analysis service...\n📊 Testing Alpha Vantage (price) + Multi-source indicators...\nPlease wait...');
             
             const priceTest = await technicalAnalysisService.quickPriceTest('AAPL');
             const techTest = await technicalAnalysisService.quickTechnicalTest('AAPL');
@@ -911,7 +911,7 @@ client.on('message_create', async (msg) => {
             responseText += `• Status: ${priceTest.success ? '✅ Success' : '❌ Failed'}\n`;
             responseText += `• Result: ${priceTest.message}\n\n`;
             
-            responseText += '📊 *FMP (INDICATORS):*\n';
+            responseText += '📊 *TECHNICAL INDICATORS (MULTI-SOURCE):*\n';
             responseText += `• Status: ${techTest.success ? '✅ Success' : '❌ Failed'}\n`;
             responseText += `• Result: ${techTest.message}\n\n`;
             
@@ -926,7 +926,7 @@ client.on('message_create', async (msg) => {
               }
               
               if (!techTest.success) {
-                responseText += `• FMP: ${techTest.error}\n`;
+                responseText += `• Technical Indicators: ${techTest.error}\n`;
               }
               
               responseText += '\n💡 *SOLUTIONS:*\n';
@@ -1176,7 +1176,7 @@ client.on('message_create', async (msg) => {
           console.log(`🔬 TECHNICAL ANALYSIS COMMAND: ${symbol}`);
           
           try {
-            await sendBotResponse(msg, `🔬 Analyzing ${symbol} with AI trading intelligence...\n📊 Fetching RSI, VWAP, CCI from FMP...\n💰 Getting current price from Alpha Vantage...\n🤖 DeepSeek AI processing market signals...\n📈 Generating buy/sell/hold recommendations...\nPlease wait...`);
+            await sendBotResponse(msg, `🔬 Analyzing ${symbol} with AI trading intelligence...\n📊 Fetching RSI, VWAP from FMP...\n📊 Fetching CCI from multiple sources...\n💰 Getting current price from Alpha Vantage...\n🤖 DeepSeek AI processing market signals...\n📈 Generating buy/sell/hold recommendations...\nPlease wait...`);
             
             // Get complete technical analysis
             const analysisData = await technicalAnalysisService.getStockAnalysis(symbol);
