@@ -20,22 +20,40 @@ class SnipeService {
   async executeSnipeAnalysis() {
     try {
       console.log('🎯 SNIPE: Starting market snipe analysis...');
+      console.log('🎯 SNIPE: API Keys status:', {
+        fmp: this.fmpKey ? 'Set' : 'Missing',
+        alphaVantage: this.alphaVantageKey ? 'Set' : 'Missing',
+        deepseek: this.deepseekKey ? 'Set' : 'Missing'
+      });
       
       // Step 1: Get active stocks (top gainers + high volume)
       console.log('📊 Step 1: Fetching active US stocks...');
       const activeStocks = await this.getActiveStocks();
       console.log(`✅ Found ${activeStocks.length} active stocks for analysis`);
+      console.log('📊 Sample stocks:', activeStocks.slice(0, 3).map(s => `${s.symbol}($${s.price})`).join(', '));
       
+      // Check if we have stocks to analyze
+      if (activeStocks.length === 0) {
+        console.log('⚠️ No active stocks found for analysis');
+        return {
+          success: true,
+          candidates: [],
+          totalAnalyzed: 0,
+          timestamp: new Date().toISOString(),
+          message: 'No active stocks available for analysis (weekend/holidays or API issues)'
+        };
+      }
+
       // Step 2: Analyze each stock with technical indicators
       console.log('📊 Step 2: Analyzing stocks with swing trading strategy...');
       const snipeCandidates = [];
       
-      for (const stock of activeStocks.slice(0, 15)) { // Limit to 15 stocks to avoid rate limits
+      for (const stock of activeStocks.slice(0, 10)) { // Limit to 10 stocks to avoid rate limits
         try {
           console.log(`🔍 Analyzing ${stock.symbol}...`);
           
           // Add delay to respect rate limits
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 800));
           
           const analysis = await this.analyzeStock(stock);
           
@@ -45,7 +63,7 @@ class SnipeService {
           }
           
           // Stop if we found enough candidates
-          if (snipeCandidates.length >= 5) {
+          if (snipeCandidates.length >= 3) {
             console.log('🎯 Found enough candidates, stopping search...');
             break;
           }
@@ -60,14 +78,20 @@ class SnipeService {
       console.log('📰 Step 3: Analyzing news sentiment for candidates...');
       const finalCandidates = [];
       
-      for (const candidate of snipeCandidates.slice(0, 5)) {
+      for (const candidate of snipeCandidates.slice(0, 3)) {
         try {
           console.log(`📰 Getting sentiment for ${candidate.symbol}...`);
           
           // Add delay for sentiment analysis
-          await new Promise(resolve => setTimeout(resolve, 1500));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
-          const sentiment = await this.getStockSentiment(candidate);
+          // Add timeout wrapper for sentiment analysis
+          const sentimentPromise = this.getStockSentiment(candidate);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Sentiment analysis timeout')), 20000)
+          );
+          
+          const sentiment = await Promise.race([sentimentPromise, timeoutPromise]);
           candidate.sentiment = sentiment;
           
           // Only include stocks with positive or neutral sentiment
@@ -110,37 +134,59 @@ class SnipeService {
     try {
       console.log('📊 Fetching active stocks from FMP...');
       
-      // Get top gainers and high volume stocks
-      const [gainersResponse, volumeResponse] = await Promise.all([
-        axios.get('https://financialmodelingprep.com/api/v3/stock_market/gainers', {
+      // Try to get top gainers first (simpler API call)
+      let activeStocks = [];
+      
+      try {
+        console.log('📊 Trying gainers endpoint...');
+        const gainersResponse = await axios.get('https://financialmodelingprep.com/api/v3/stock_market/gainers', {
           params: { apikey: this.fmpKey },
-          timeout: 15000
-        }),
-        axios.get('https://financialmodelingprep.com/api/v3/stock_market/actives', {
-          params: { apikey: this.fmpKey },
-          timeout: 15000
-        })
-      ]);
+          timeout: 10000
+        });
+        
+        if (gainersResponse.data && gainersResponse.data.length > 0) {
+          activeStocks = gainersResponse.data;
+          console.log(`✅ Got ${activeStocks.length} gainers from FMP`);
+        }
+      } catch (gainersError) {
+        console.log('⚠️ Gainers endpoint failed:', gainersError.message);
+      }
       
-      const gainers = gainersResponse.data || [];
-      const highVolume = volumeResponse.data || [];
+      // If gainers failed or returned few results, try actives
+      if (activeStocks.length < 5) {
+        try {
+          console.log('📊 Trying actives endpoint...');
+          const volumeResponse = await axios.get('https://financialmodelingprep.com/api/v3/stock_market/actives', {
+            params: { apikey: this.fmpKey },
+            timeout: 10000
+          });
+          
+          if (volumeResponse.data && volumeResponse.data.length > 0) {
+            activeStocks = [...activeStocks, ...volumeResponse.data];
+            console.log(`✅ Added ${volumeResponse.data.length} high volume stocks`);
+          }
+        } catch (volumeError) {
+          console.log('⚠️ Actives endpoint failed:', volumeError.message);
+        }
+      }
       
-      console.log(`📊 Got ${gainers.length} gainers and ${highVolume.length} high volume stocks`);
+      // Deduplicate and filter
+      if (activeStocks.length > 0) {
+        const uniqueStocks = activeStocks.filter((stock, index, self) => 
+          index === self.findIndex(s => s.symbol === stock.symbol)
+        );
+        
+        // Filter for reasonable price range and volume
+        const filteredStocks = uniqueStocks.filter(stock => 
+          stock.price >= 5 && stock.price <= 500 && stock.volume > 100000
+        );
+        
+        console.log(`✅ Filtered to ${filteredStocks.length} active stocks for analysis`);
+        
+        return filteredStocks.slice(0, 15); // Limit to top 15 to manage API calls
+      }
       
-      // Combine and deduplicate
-      const combinedStocks = [...gainers, ...highVolume];
-      const uniqueStocks = combinedStocks.filter((stock, index, self) => 
-        index === self.findIndex(s => s.symbol === stock.symbol)
-      );
-      
-      // Filter for reasonable price range and volume
-      const filteredStocks = uniqueStocks.filter(stock => 
-        stock.price >= 5 && stock.price <= 500 && stock.volume > 100000
-      );
-      
-      console.log(`✅ Filtered to ${filteredStocks.length} active stocks for analysis`);
-      
-      return filteredStocks.slice(0, 20); // Limit to top 20 to manage API calls
+      throw new Error('No active stocks data received from FMP');
       
     } catch (error) {
       console.error('❌ Failed to fetch active stocks:', error.message);
