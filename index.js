@@ -1,3 +1,4 @@
+
 // Fentrix Stock Bot - Fixed Version
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
@@ -390,7 +391,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 });
 
 // Import services with enhanced Railway debugging
-let stockService, enhancedSentimentService, alertService, technicalAnalysisService;
+let stockService, enhancedSentimentService, alertService, technicalAnalysisService, snipeService;
 
 console.log('📦 LOADING SERVICE MODULES WITH ENHANCED DEBUGGING...');
 console.log('🔍 Current working directory:', process.cwd());
@@ -528,6 +529,21 @@ try {
     technicalAnalysisService = null;
   }
   
+  console.log('\n🎯 LOADING SNIPE SERVICE...');
+  
+  // Try Snipe Service for swing trading analysis
+  try {
+    console.log('🔄 Attempting to load SNIPE service...');
+    snipeService = require('./services/snipeService');
+    console.log('✅ SNIPE SERVICE LOADED SUCCESSFULLY!');
+    console.log('📊 Snipe service type:', typeof snipeService);
+    console.log('🎯 Swing trading analysis with market scanning available');
+  } catch (snipeError) {
+    console.error('❌ SNIPE SERVICE LOADING FAILED:');
+    console.error('📝 Error message:', snipeError.message);
+    snipeService = null;
+  }
+  
   // Enhanced summary of loaded services with fallback system
   console.log('\n📋 BULLETPROOF SERVICE LOADING SUMMARY:');
   const loadedServices = [];
@@ -564,14 +580,23 @@ try {
     console.log('❌ Technical Analysis Service: FAILED');
   }
   
+  if (snipeService) {
+    loadedServices.push('Snipe Service');
+    console.log('✅ Snipe Service: LOADED');
+    console.log('🎯 Swing Trading Analysis + Market Scanning: Ready');
+  } else {
+    console.log('❌ Snipe Service: FAILED');
+  }
+  
   if (loadedServices.length > 0) {
-    console.log(`\n🎉 BULLETPROOF SUCCESS: ${loadedServices.length}/4 services loaded with fallback protection!`);
+    console.log(`\n🎉 BULLETPROOF SUCCESS: ${loadedServices.length}/5 services loaded with fallback protection!`);
     console.log('🔥 ALL BOT FEATURES ARE NOW OPERATIONAL:');
     console.log('📈 Real-time stock prices: ✅');
     console.log('🪙 Real-time crypto prices: ✅');
     console.log('🚨 Price alerts: ✅');
     console.log('🧠 Sentiment analysis: ✅');
     console.log('🔬 Technical analysis with AI: ✅');
+    console.log('🎯 Swing trading market snipe: ✅');
     console.log('🤖 Fentrix.Ai Professional Trading Bot: READY! 🚀');
   } else {
     console.log('\n❌ CRITICAL: ALL SERVICES FAILED (even fallbacks)');
@@ -787,7 +812,8 @@ client.on('message_create', async (msg) => {
             debugInfo += `• Stock Service: ${stockService ? '✅ Loaded' : '❌ Failed'}\n`;
             debugInfo += `• Sentiment Service: ${enhancedSentimentService ? '✅ Loaded' : '❌ Failed'}\n`;
             debugInfo += `• Alert Service: ${alertService ? '✅ Loaded' : '❌ Failed'}\n`;
-            debugInfo += `• Technical Analysis: ${technicalAnalysisService ? '✅ Loaded (Multi-source: FMP + Alpha Vantage + DeepSeek AI)' : '❌ Failed'}\n\n`;
+            debugInfo += `• Technical Analysis: ${technicalAnalysisService ? '✅ Loaded (Multi-source: FMP + Alpha Vantage + DeepSeek AI)' : '❌ Failed'}\n`;
+            debugInfo += `• Snipe Service: ${snipeService ? '✅ Loaded (Swing Trading + Market Scanning)' : '❌ Failed'}\n\n`;
             
             // Service functionality tests
             if (stockService) {
@@ -831,7 +857,8 @@ client.on('message_create', async (msg) => {
             debugInfo += '🪙 !crypto bitcoin - Test crypto data\n';
             debugInfo += '🚨 !alert AAPL $190.00 - Test alerts\n';
             debugInfo += '🧠 !sentiment AAPL - Test sentiment\n';
-            debugInfo += '🔬 !checktest - Test technical analysis (Multi-source)\n\n';
+            debugInfo += '🔬 !checktest - Test technical analysis (Multi-source)\n';
+            debugInfo += '🎯 !snipe market - Test swing trading scanner\n\n';
             debugInfo += '🤖 *Powered by Fentrix.Ai*';
             
             await sendBotResponse(msg, debugInfo);
@@ -1229,6 +1256,34 @@ client.on('message_create', async (msg) => {
           }
         }
         
+        // Snipe Market command - NEW !snipe market FEATURE
+        else if (text.includes('!snipe market')) {
+          if (!snipeService) {
+            await sendBotResponse(msg, '❌ Snipe service not available. Please try again later.');
+            return;
+          }
+          
+          console.log('🎯 SNIPE MARKET COMMAND DETECTED');
+          
+          try {
+            await sendBotResponse(msg, `🎯 *MARKET SNIPE INITIATED* 📊\n\n🔍 Scanning active US stocks (gainers + high volume)...\n📊 Analyzing technical indicators (RSI, VWAP, CCI)...\n🧠 Applying swing trading strategy:\n• RSI < 30 (Oversold)\n• CCI < -100 (Oversold)\n• Price > VWAP (Above average)\n📰 Checking news sentiment...\n🎯 Finding best opportunities...\n\n⏰ This may take 30-60 seconds...\nPlease wait...`);
+            
+            // Execute snipe analysis
+            const snipeResults = await snipeService.executeSnipeAnalysis();
+            console.log(`✅ Snipe analysis completed: ${snipeResults.candidates?.length || 0} candidates found`);
+            
+            // Format and send results
+            const formattedResults = snipeService.formatSnipeResults(snipeResults);
+            await sendBotResponse(msg, formattedResults);
+            
+            console.log(`✅ SNIPE MARKET: Results sent to chat`);
+            
+          } catch (error) {
+            console.log(`❌ Snipe market analysis failed:`, error.message);
+            await sendBotResponse(msg, `❌ Market snipe analysis failed: ${error.message}\n\n💡 This could be due to:\n• API rate limits\n• Market hours\n• Network issues\n\n🔄 Try again in a few minutes\n\n🤖 Powered by Fentrix.Ai`);
+          }
+        }
+        
         // Help command
         else if (text.includes('!help')) {
           console.log('❓ HELP COMMAND');
@@ -1258,6 +1313,9 @@ client.on('message_create', async (msg) => {
 • !check AAPL - AI buy/sell/hold recommendations
 • !check GOOGL - Professional trading analysis with timing
 
+🎯 *SWING TRADING COMMANDS:*
+• !snipe market - Scan market for swing trading opportunities
+
 ❓ *OTHER COMMANDS:*
 • !help - Show this help
 • !test - Test bot functionality
@@ -1268,6 +1326,7 @@ client.on('message_create', async (msg) => {
 ✅ Real-time stock/crypto prices
 ✅ Professional sentiment analysis
 ✅ AI technical analysis (RSI, VWAP, CCI)
+✅ Swing trading market scanner
 ✅ Real-time news integration
 ✅ Clean professional responses
 ✅ Price alerts with LIVE monitoring
@@ -1282,6 +1341,7 @@ client.on('message_create', async (msg) => {
 🪙 !crypto bitcoin
 🚨 !alert bitcoin $45000
 🔬 !check TSLA
+🎯 !snipe market
 
 👥 Anyone in this group can use ALL commands!
 🤖 Powered by Fentrix.Ai - Professional market analysis!`;
